@@ -5,7 +5,7 @@
 // original y dos ejecuciones no se pisan entre sí.
 import crypto from 'node:crypto';
 import type { Connection } from 'mysql2/promise';
-import { SANDBOX_PREFIX } from '../config.js';
+import { config, SANDBOX_PREFIX } from '../config.js';
 import { openConnection } from './connections.js';
 import { datasetDbName, getDataset } from './datasets.js';
 
@@ -39,7 +39,49 @@ export interface Sandbox {
   dispose: () => Promise<void>;
 }
 
+// ---- Pool de sandboxes precalentados ----
+// Copiar la base tarda ~1-2 s. Para que "Comprobar" responda rápido, se mantienen
+// algunas copias listas por dataset: se entrega una y se prepara otra en segundo plano.
+const pool = new Map<string, Promise<Sandbox>[]>();
+let poolClosed = false;
+
+function refill(datasetId: string) {
+  if (poolClosed || config.limits.sandboxPool <= 0) return;
+  const q = pool.get(datasetId) ?? [];
+  pool.set(datasetId, q);
+  while (q.length < config.limits.sandboxPool) {
+    const p = buildSandbox(datasetId);
+    p.catch(() => {
+      const i = q.indexOf(p);
+      if (i >= 0) q.splice(i, 1);
+    });
+    q.push(p);
+  }
+}
+
+/** Entrega un sandbox nuevo (del pool si hay uno listo) y repone el pool. */
 export async function createSandbox(datasetId: string): Promise<Sandbox> {
+  const next = pool.get(datasetId)?.shift();
+  refill(datasetId);
+  if (next) {
+    try {
+      return await next;
+    } catch {
+      /* si el precalentado falló, se crea uno en el momento */
+    }
+  }
+  return buildSandbox(datasetId);
+}
+
+/** Libera los sandboxes del pool (al cerrar el servidor o al terminar las pruebas). */
+export async function closeSandboxPool(): Promise<void> {
+  poolClosed = true;
+  const all = [...pool.values()].flat();
+  pool.clear();
+  await Promise.all(all.map((p) => p.then((s) => s.dispose()).catch(() => {})));
+}
+
+async function buildSandbox(datasetId: string): Promise<Sandbox> {
   const ds = getDataset(datasetId);
   if (!ds) throw new Error(`Dataset desconocido: ${datasetId}`);
   // El nombre lleva la hora de creación para poder limpiar huérfanos viejos sin tocar los activos.

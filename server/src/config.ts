@@ -45,10 +45,11 @@ export const config = {
   },
   limits: {
     timeoutMs: num('QUERY_TIMEOUT_MS', 5000),
-    maxRows: num('MAX_ROWS', 5000), // filas leídas como máximo por resultado
+    maxRows: num('MAX_ROWS', 10000), // filas leídas como máximo por resultado
     displayRows: num('DISPLAY_ROWS', 500), // filas enviadas al navegador
     maxSqlLength: num('MAX_SQL_LENGTH', 20000),
     maxStatements: num('MAX_STATEMENTS', 30),
+    sandboxPool: num('SANDBOX_POOL', 2), // copias de la base preparadas de antemano (0 = desactivado)
   },
   paths: {
     datasets: path.resolve(here, '../../db/datasets'),

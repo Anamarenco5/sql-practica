@@ -1,6 +1,6 @@
 import { createApp } from './app.js';
 import { config } from './config.js';
-import { cleanupOrphanSandboxes } from './db/sandbox.js';
+import { cleanupOrphanSandboxes, closeSandboxPool } from './db/sandbox.js';
 import { loadBuiltInExercises } from './exercises/repository.js';
 
 async function main() {
@@ -11,6 +11,12 @@ async function main() {
   } catch (e) {
     console.warn('No se pudo conectar a MySQL con el usuario sandbox:', (e as Error).message);
     console.warn('¿Corriste "npm run db:setup"?');
+  }
+  // Al cerrar (Ctrl+C) se borran las copias precalentadas.
+  for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+    process.on(sig, () => {
+      closeSandboxPool().finally(() => process.exit(0));
+    });
   }
   // Solo escucha en localhost: la API no queda expuesta a la red.
   createApp().listen(config.port, '127.0.0.1', () => {
