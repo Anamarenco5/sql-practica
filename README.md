@@ -79,7 +79,13 @@ Para detener el servidor: `Ctrl + C` en la terminal.
 npm test
 ```
 
-Corre pruebas unitarias (divisor de sentencias, comparador de resultados, filtros de seguridad) y pruebas contra MySQL real: entre otras cosas, verifica que **cada solución de referencia apruebe su propio ejercicio**, que las respuestas incorrectas típicas se rechacen y que el aislamiento funcione. Requiere haber corrido `npm run db:setup`.
+Corre unas 220 pruebas (tarda unos 3 minutos):
+
+- **Unitarias**: divisor de sentencias, comparador de resultados y filtros de seguridad.
+- **Contra MySQL real**: cada solución de referencia aprueba su propio ejercicio, un script vacío no aprueba ninguno de modificación, y las respuestas incorrectas típicas se rechazan.
+- **Seguridad** (`test/security.test.ts`): intentos de escalar privilegios, leer otras bases o archivos, bucles infinitos, resultados gigantes, pedidos desde otras webs, 20 comprobaciones simultáneas y persistencia del progreso.
+
+Requiere haber corrido `npm run db:setup`.
 
 ## Arquitectura
 
@@ -121,7 +127,12 @@ Además:
 - Los de modificación corren sobre una copia `sqlp_sbx_<id>` que se crea y se borra en cada ejecución. La base original `sqlp_ds_universidad` nunca cambia. Para que la copia sea rápida, la tabla `asistencias` (180.000 filas) se copia vacía.
 - Hay un tiempo máximo por consulta (`QUERY_TIMEOUT_MS`, 5 s): si se pasa, se cancela con `KILL QUERY`. También hay un máximo de filas (`MAX_ROWS`, 10.000).
 - Para que "Comprobar" responda rápido, el servidor mantiene `SANDBOX_POOL` copias (2 por defecto) ya preparadas. Se borran al cerrar el servidor con `Ctrl + C`, y las que queden de un corte se borran al iniciar.
-- Se bloquean `GRANT`, `CREATE USER`, `DROP DATABASE`, `INTO OUTFILE`, `LOAD DATA`, `SET GLOBAL`, `USE`, etc., con un mensaje claro. Los permisos de MySQL son la protección principal; este filtro es una segunda capa.
+- Se bloquean `GRANT`, `CREATE USER`, `DROP DATABASE`, `INTO OUTFILE`, `LOAD DATA`, `SET GLOBAL`, `USE`, SQL dinámico (`PREPARE`), eventos (`CREATE EVENT`), etc., con un mensaje claro. Los permisos de MySQL son la protección principal; este filtro es una segunda capa.
+- Las filas se leen de a una (streaming) y se guardan como máximo `MAX_ROWS` por resultado. Así, un procedimiento que devuelve millones de filas no agota la memoria (antes llegaba a 1,4 GB; ahora, unos MB).
+- Cada usuario de MySQL tiene como máximo 20 conexiones, y el servidor abre como mucho 8 entornos a la vez por usuario: el resto espera en fila.
+- La API solo acepta pedidos con `Host` y `Origin` locales (`localhost` / `127.0.0.1`) y con cuerpo JSON. Así, una página web abierta en el navegador no puede usarla (CSRF ni DNS rebinding).
+- En los enunciados (markdown) se escapa el HTML y solo se permiten enlaces `http(s)` o `mailto`.
+- Cada 10 minutos se borran las copias de la base que hayan quedado sueltas.
 - Las credenciales viven solo en `server/.env`, que está en `.gitignore`. El frontend no las ve nunca.
 - El setup activa `log_bin_trust_function_creators` para que un usuario sin privilegios pueda crear triggers y funciones dentro de los sandbox.
 
@@ -157,5 +168,5 @@ Cómo armar la corrección de uno de modificación:
 - [x] Etapa 2: estructura (frontend, backend, MySQL, setup)
 - [x] Etapa 3: pantalla de ejercicio completa y 13 ejercicios de ejemplo
 - [x] Etapa 4: 94 ejercicios (TP3, TP4, TP5), panel de repaso, filtros y ejercicios propios
-- [ ] Etapa 5: revisión de seguridad y pruebas de carga
+- [x] Etapa 5: auditoría de seguridad con ataques reales, pruebas de carga y de persistencia
 - [ ] Etapa 6: flujo de commits en GitHub
