@@ -116,6 +116,54 @@ export interface Sample {
   total: number;
 }
 
+export interface ReviewData {
+  items: { id: string; title: string; topic: string; reason: string; concepts: string[] }[];
+  topics: { id: string; name: string; total: number; solved: number; struggling: number; failedAttempts: number }[];
+  concepts: { name: string; count: number }[];
+  errors: { code: string; label: string; count: number }[];
+}
+
+export interface Probe {
+  description: string;
+  sql: string;
+  expect: 'ok' | 'error';
+}
+
+export interface Requirement {
+  pattern: string;
+  message: string;
+  forbid: boolean;
+}
+
+/** Definición completa de un ejercicio (lo que se edita en el formulario). */
+export interface ExerciseDefinition {
+  title: string;
+  topic: string;
+  difficulty: Difficulty;
+  dataset: string;
+  mode: Mode;
+  source?: string;
+  statement: string;
+  tables: string[];
+  starterSql: string;
+  solution: string;
+  explanation: string;
+  hints: string[];
+  concepts: string[];
+  requirements: Requirement[];
+  check:
+    | { type: 'result'; orderMatters: boolean; orderKeys?: number[]; checkColumnNames: boolean; numericTolerance?: number }
+    | { type: 'state'; verifyQueries: string[]; probes: Probe[]; numericTolerance?: number };
+}
+
+export interface ValidationResult {
+  ok: boolean;
+  errors?: string[];
+  warnings?: string[];
+  grade?: GradeResult;
+  id?: string;
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -124,7 +172,7 @@ export class ApiError extends Error {
   }
 }
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
+async function req<T>(path: string, init?: RequestInit, acceptStatus: number[] = []): Promise<T> {
   let res: Response;
   try {
     res = await fetch(path, {
@@ -135,7 +183,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError('No se pudo conectar con el servidor. ¿Está corriendo "npm run dev"?', 0);
   }
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(body.error ?? `Error ${res.status}`, res.status);
+  if (!res.ok && !acceptStatus.includes(res.status)) throw new ApiError(body.error ?? `Error ${res.status}`, res.status);
   return body as T;
 }
 
@@ -149,6 +197,15 @@ export const api = {
   solution: (id: string) => req<{ solution: string; explanation: string }>(`/api/exercises/${encodeURIComponent(id)}/solution`),
   saveDraft: (id: string, sql: string) => req<{ ok: true }>(`/api/exercises/${encodeURIComponent(id)}/draft`, { method: 'PUT', body: JSON.stringify({ sql }) }),
   schema: (dataset: string) => req<TableInfo[]>(`/api/datasets/${encodeURIComponent(dataset)}/schema`),
+  review: () => req<ReviewData>('/api/review'),
+  datasets: () => req<{ id: string; name: string; description: string }[]>('/api/datasets'),
+  customExercise: (id: string) => req<ExerciseDefinition & { id: string }>(`/api/custom-exercises/${encodeURIComponent(id)}`),
+  validateCustom: (def: ExerciseDefinition) =>
+    req<ValidationResult>('/api/custom-exercises/validate', { method: 'POST', body: JSON.stringify(def) }, [422]),
+  createCustom: (def: ExerciseDefinition) => req<ValidationResult>('/api/custom-exercises', { method: 'POST', body: JSON.stringify(def) }, [422]),
+  updateCustom: (id: string, def: ExerciseDefinition) =>
+    req<ValidationResult>(`/api/custom-exercises/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(def) }, [422]),
+  deleteCustom: (id: string) => req<{ ok: true }>(`/api/custom-exercises/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   sample: (dataset: string, table: string) => req<Sample>(`/api/datasets/${encodeURIComponent(dataset)}/tables/${encodeURIComponent(table)}/sample?limit=10`),
 };
 

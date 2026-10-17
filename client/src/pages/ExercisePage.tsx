@@ -140,6 +140,11 @@ export function ExercisePage() {
             <span className={`tag mode-${ex.mode}`}>{MODE_LABEL[ex.mode]}</span>
             {ex.source && <span className="tag plain">{ex.source}</span>}
             {ex.progress?.solved && <span className="tag solved">Resuelto</span>}
+            {ex.custom && (
+              <Link className="tag plain" to={`/ejercicios/${ex.id}/editar`}>
+                Propio: editar
+              </Link>
+            )}
           </div>
         </header>
 

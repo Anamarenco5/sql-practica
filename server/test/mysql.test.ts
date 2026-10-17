@@ -3,6 +3,7 @@ import request from 'supertest';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import { closePools, getAppPool } from '../src/db/connections.js';
+import { closeSandboxPool } from '../src/db/sandbox.js';
 import { loadBuiltInExercises } from '../src/exercises/repository.js';
 import { grade } from '../src/grading/grader.js';
 import { runScript } from '../src/sql/runner.js';
@@ -14,6 +15,7 @@ afterAll(async () => {
   // limpiamos los intentos que generaron las pruebas
   await getAppPool().query("DELETE FROM intentos WHERE sql_texto LIKE '%/*test*/%'");
   await getAppPool().query("DELETE FROM borradores WHERE sql_texto LIKE '%/*test*/%'");
+  await closeSandboxPool();
   await closePools();
 });
 
@@ -23,6 +25,22 @@ describe('cada solución de referencia aprueba su propio ejercicio', () => {
     expect(r.error).toBeUndefined();
     expect(r.feedback).toEqual([]);
     expect(r.correct).toBe(true);
+  });
+});
+
+describe('un script vacío no aprueba ningún ejercicio de modificación', () => {
+  it.each(exercises.filter((e) => e.mode === 'sandbox').map((e) => [e.id, e] as const))('%s', async (_id, ex) => {
+    const r = await grade(ex, 'SELECT 1');
+    expect(r.correct).toBe(false);
+  });
+});
+
+describe('la consulta propuesta de los ejercicios de corrección', () => {
+  // Las que el TP considera correctas tienen que aprobar tal cual; las incorrectas, no.
+  const correctas = ['u-tp3-45', 'u-tp3-48', 'u-tp3-50', 'u-tp3-57', 'u-tp3-58'];
+  it.each(exercises.filter((e) => e.topic === 'correccion').map((e) => [e.id, e] as const))('%s', async (id, ex) => {
+    const r = await grade(ex, ex.starterSql);
+    expect(r.correct).toBe(correctas.includes(id));
   });
 });
 
@@ -156,5 +174,58 @@ describe('API', () => {
   it('rechaza nombres de tabla inventados en la muestra de datos', async () => {
     const res = await request(app).get('/api/datasets/universidad/tables/alumnos`;DROP/sample');
     expect(res.status).toBe(404);
+  });
+
+  it('crea, corrige, edita y borra un ejercicio personalizado', async () => {
+    const def = {
+      title: 'Prueba /*test*/ aulas grandes',
+      topic: 'consultas-basicas',
+      difficulty: 'basico',
+      dataset: 'universidad',
+      mode: 'readonly',
+      statement: 'Aulas con capacidad mayor a 45.',
+      tables: ['aulas'],
+      solution: 'SELECT nombre, capacidad FROM aulas WHERE capacidad > 45',
+      hints: ['WHERE'],
+      check: { type: 'result' },
+    };
+    // una solución que no corre no se puede guardar
+    const bad = await request(app).post('/api/custom-exercises').send({ ...def, solution: 'SELECT nada FROM aulas' });
+    expect(bad.status).toBe(422);
+    expect(bad.body.errors.join(' ')).toMatch(/Unknown column/);
+
+    const created = await request(app).post('/api/custom-exercises').send(def);
+    expect(created.status).toBe(201);
+    const id = created.body.id as string;
+    expect(id).toMatch(/^c-prueba-test-aulas-grandes-/);
+
+    const list = await request(app).get('/api/exercises');
+    expect(list.body.some((e: { id: string; custom: boolean }) => e.id === id && e.custom)).toBe(true);
+
+    const ok = await request(app).post(`/api/exercises/${id}/check`).send({ sql: 'SELECT nombre, capacidad FROM aulas WHERE capacidad >= 50 /*test*/' });
+    expect(ok.body.correct).toBe(true);
+
+    const edited = await request(app).put(`/api/custom-exercises/${id}`).send({ ...def, solution: 'SELECT nombre, capacidad FROM aulas WHERE capacidad > 30' });
+    expect(edited.status).toBe(200);
+    const now = await request(app).post(`/api/exercises/${id}/check`).send({ sql: 'SELECT nombre, capacidad FROM aulas WHERE capacidad >= 50 /*test*/' });
+    expect(now.body.correct).toBe(false); // la corrección usa la solución nueva
+
+    const del = await request(app).delete(`/api/custom-exercises/${id}`);
+    expect(del.status).toBe(200);
+    expect((await request(app).get(`/api/exercises/${id}`)).status).toBe(404);
+    await getAppPool().query('DELETE FROM intentos WHERE id_ejercicio = ?', [id]);
+  });
+
+  it('no permite pisar un ejercicio de fábrica', async () => {
+    const res = await request(app).put('/api/custom-exercises/u-tp3-01').send({});
+    expect(res.status).toBe(404);
+  });
+
+  it('arma el panel de repaso', async () => {
+    await request(app).post('/api/exercises/u-tp3-16/check').send({ sql: 'SELECT 1 /*test*/', hintsUsed: 0 });
+    const res = await request(app).get('/api/review');
+    expect(res.status).toBe(200);
+    expect(res.body.items.some((i: { id: string }) => i.id === 'u-tp3-16')).toBe(true);
+    expect(res.body.topics.find((t: { id: string }) => t.id === 'left-join').struggling).toBeGreaterThan(0);
   });
 });

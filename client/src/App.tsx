@@ -1,5 +1,6 @@
 import { Link, Route, Routes } from 'react-router-dom';
 import { Dashboard } from './pages/Dashboard';
+import { ExerciseEditor } from './pages/ExerciseEditor';
 import { ExercisePage } from './pages/ExercisePage';
 
 export default function App() {
@@ -21,6 +22,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/ejercicio/:id" element={<ExercisePage />} />
+        <Route path="/ejercicios/nuevo" element={<ExerciseEditor />} />
+        <Route path="/ejercicios/:id/editar" element={<ExerciseEditor />} />
         <Route
           path="*"
           element={

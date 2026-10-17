@@ -2,7 +2,14 @@
 
 Plataforma personal para practicar SQL sobre **MySQL real**, pensada para preparar el final de **Diseño de Bases de Datos**. Está inspirada en [Aprende SQL](https://www.aprendesql.dev/): escribís la consulta, la ejecutás y comprobás si es correcta.
 
-Los ejercicios usan la base **Universidad** de los trabajos prácticos (TP3, TP4…).
+Trae **94 ejercicios** sobre la base **Universidad** de los trabajos prácticos:
+
+| Tema | Ejercicios |
+|---|---|
+| Consultas, JOIN, agregación, LEFT JOIN, subconsultas e integradores | TP3, secciones 1 a 6 |
+| Detección y corrección de errores (la consulta propuesta viene cargada en el editor) | TP3, ejercicios 41 a 60 |
+| Restricciones (CHECK, UNIQUE, FK con RESTRICT / CASCADE / SET NULL), triggers, procedimientos y funciones | TP4 |
+| Procedimientos con transacciones, handler, ROLLBACK y RESIGNAL | TP5 completo |
 
 ## Qué hace
 
@@ -13,6 +20,9 @@ Los ejercicios usan la base **Universidad** de los trabajos prácticos (TP3, TP4
 - En los ejercicios de modificación (UPDATE, CHECK, triggers…) trabajás sobre una **copia temporal** de la base. Después se verifica el estado final y se corren pruebas que deben fallar o funcionar.
 - Muestra pistas de a una y la solución comentada, que se habilita después del primer intento.
 - Guarda tus intentos, lo que ya resolviste y un borrador automático de cada ejercicio.
+- **Panel "Para repasar"**: ejercicios intentados sin resolver, resueltos con muchos intentos fallidos o con pistas, los conceptos que más se repiten en ellos y tus errores de MySQL más frecuentes.
+- **Filtros** por texto (título o TP), dificultad, estado, tipo y origen.
+- **Ejercicios propios**: un formulario para cargar enunciado, solución, pistas y criterios de corrección. Antes de guardar, la solución se ejecuta y tiene que aprobar su propio ejercicio.
 
 ## Requisitos
 
@@ -109,7 +119,8 @@ Además:
 
 - Los ejercicios de consulta corren en una sesión `READ ONLY`.
 - Los de modificación corren sobre una copia `sqlp_sbx_<id>` que se crea y se borra en cada ejecución. La base original `sqlp_ds_universidad` nunca cambia. Para que la copia sea rápida, la tabla `asistencias` (180.000 filas) se copia vacía.
-- Hay un tiempo máximo por consulta (`QUERY_TIMEOUT_MS`, 5 s): si se pasa, se cancela con `KILL QUERY`. También hay un máximo de filas (`MAX_ROWS`).
+- Hay un tiempo máximo por consulta (`QUERY_TIMEOUT_MS`, 5 s): si se pasa, se cancela con `KILL QUERY`. También hay un máximo de filas (`MAX_ROWS`, 10.000).
+- Para que "Comprobar" responda rápido, el servidor mantiene `SANDBOX_POOL` copias (2 por defecto) ya preparadas. Se borran al cerrar el servidor con `Ctrl + C`, y las que queden de un corte se borran al iniciar.
 - Se bloquean `GRANT`, `CREATE USER`, `DROP DATABASE`, `INTO OUTFILE`, `LOAD DATA`, `SET GLOBAL`, `USE`, etc., con un mensaje claro. Los permisos de MySQL son la protección principal; este filtro es una segunda capa.
 - Las credenciales viven solo en `server/.env`, que está en `.gitignore`. El frontend no las ve nunca.
 - El setup activa `log_bin_trust_function_creators` para que un usuario sin privilegios pueda crear triggers y funciones dentro de los sandbox.
@@ -122,7 +133,13 @@ Además:
 
 ### Agregar ejercicios
 
-Por ahora, agregando objetos a un JSON de `server/exercises/`. La validación está en `server/src/exercises/model.ts`. Después de agregar uno, corré `npm test`: comprueba que la solución de referencia apruebe su propio ejercicio. La Etapa 4 suma un formulario para cargar ejercicios propios desde la interfaz.
+- **Desde la app:** botón *Crear ejercicio propio* en el inicio. Se guardan en la base `sqlpractica_app` (tabla `ejercicios_personalizados`), así que no se pierden al actualizar el código. Los propios se editan o borran desde el enlace *Propio: editar* del ejercicio.
+- **En el código:** agregando objetos a un JSON de `server/exercises/`. La validación está en `server/src/exercises/model.ts`. Después corré `npm test`: comprueba que cada solución de referencia apruebe su propio ejercicio y que un script vacío no apruebe ninguno de modificación.
+
+Cómo armar la corrección de uno de modificación:
+
+- **Pruebas** (`probes`): sentencias que la base debe rechazar (`"error"`) o aceptar (`"ok"`) después del script. Cada una se deshace al terminar, salvo que llame a un procedimiento que haga su propio `COMMIT`.
+- **Consultas de verificación** (`verifyQueries`): se corren al final y su último resultado se compara con el de la solución. Para la estructura podés consultar `information_schema` (por ejemplo `REFERENTIAL_CONSTRAINTS` para ver el `DELETE_RULE` de una FK).
 
 ## Problemas frecuentes
 
@@ -139,6 +156,6 @@ Por ahora, agregando objetos a un JSON de `server/exercises/`. La validación es
 - [x] Etapa 1: inspección y plan
 - [x] Etapa 2: estructura (frontend, backend, MySQL, setup)
 - [x] Etapa 3: pantalla de ejercicio completa y 13 ejercicios de ejemplo
-- [ ] Etapa 4: más ejercicios (TP3 completo, TP4, TP5), temas para repasar y ejercicios personalizados desde la interfaz
-- [ ] Etapa 5: más pruebas de seguridad y rendimiento (sandboxes precalentados)
+- [x] Etapa 4: 94 ejercicios (TP3, TP4, TP5), panel de repaso, filtros y ejercicios propios
+- [ ] Etapa 5: revisión de seguridad y pruebas de carga
 - [ ] Etapa 6: flujo de commits en GitHub
