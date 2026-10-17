@@ -12,23 +12,10 @@ import { buildReview } from './progress/review.js';
 import { getAttempts, getDraft, getProgress, recordAttempt, saveDraft } from './progress/store.js';
 import { lastRows, type ScriptOutcome } from './sql/executor.js';
 import { runScript } from './sql/runner.js';
+import { semaphore } from './util/semaphore.js';
 
-// Limita ejecuciones simultáneas (cada sandbox copia una base entera).
-function semaphore(max: number) {
-  let active = 0;
-  const queue: (() => void)[] = [];
-  return async <T>(fn: () => Promise<T>): Promise<T> => {
-    if (active >= max) await new Promise<void>((r) => queue.push(r));
-    active++;
-    try {
-      return await fn();
-    } finally {
-      active--;
-      queue.shift()?.();
-    }
-  };
-}
-const limit = semaphore(4);
+// Limita pedidos simultáneos de ejecución (las conexiones a MySQL se limitan además en runner.ts).
+const limit = semaphore(4).run;
 
 const SqlBody = z.object({
   sql: z.string().max(config.limits.maxSqlLength),
@@ -111,7 +98,36 @@ function forDisplay(out: ScriptOutcome | undefined) {
 export function createApp() {
   const app = express();
   app.disable('x-powered-by');
+
+  // La API solo debe usarse desde esta misma computadora y desde la propia app.
+  // - Host: frena ataques de "DNS rebinding" (una web maliciosa que apunta un dominio a 127.0.0.1).
+  // - Origin: frena que otra web abierta en el navegador le haga pedidos a la API (CSRF).
+  const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+  app.use((req, res, next) => {
+    const host = req.headers.host ?? '';
+    if (!LOCAL.test(host)) return res.status(403).json({ error: 'Acceso permitido solo desde esta computadora.' });
+    const origin = req.headers.origin;
+    if (origin) {
+      let ok = false;
+      try {
+        ok = LOCAL.test(new URL(origin).host);
+      } catch {
+        ok = false;
+      }
+      if (!ok) return res.status(403).json({ error: 'Origen no permitido.' });
+    }
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
+  // Solo JSON: un formulario de otra web no puede mandar este tipo sin permiso del navegador.
   app.use(express.json({ limit: '100kb' }));
+  app.use((req, res, next) => {
+    if (['POST', 'PUT', 'PATCH'].includes(req.method) && !req.is('application/json')) {
+      return res.status(415).json({ error: 'El cuerpo tiene que ser JSON.' });
+    }
+    next();
+  });
 
 
   app.get('/api/health', (_req, res) => {

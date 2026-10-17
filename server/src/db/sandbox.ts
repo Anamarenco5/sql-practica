@@ -125,8 +125,12 @@ export async function cleanupOrphanSandboxes(olderThanMs = 10 * 60 * 1000): Prom
     let n = 0;
     for (const r of rows as Record<string, string>[]) {
       const db = Object.values(r)[0];
-      const created = parseInt(db.slice(SANDBOX_PREFIX.length).split('_')[0], 36);
-      if (Number.isFinite(created) && Date.now() - created < olderThanMs) continue;
+      // Solo se respetan las bases recientes con el formato exacto que genera la app
+      // (sqlp_sbx_<hora base36>_<8 hex>); cualquier otra se considera huérfana.
+      const m = /^sqlp_sbx_([0-9a-z]+)_[0-9a-f]{8}$/.exec(db);
+      const created = m ? parseInt(m[1], 36) : NaN;
+      const age = Date.now() - created;
+      if (Number.isFinite(created) && age >= 0 && age < olderThanMs) continue;
       await conn.query(`DROP DATABASE IF EXISTS \`${db}\``);
       n++;
     }

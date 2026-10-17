@@ -22,6 +22,10 @@ const ALWAYS_BLOCKED: Rule[] = [
   { re: /\b(LOCK\s+TABLES?|UNLOCK\s+TABLES?|LOCK\s+INSTANCE)\b/, msg: 'No se permite bloquear tablas manualmente.' },
   { re: /\b(HANDLER)\s+\w+\s+(OPEN|READ|CLOSE)\b/, msg: 'Sentencia HANDLER no permitida.' },
   { re: /\bCHANGE\s+(MASTER|REPLICATION)\b|\bSTART\s+(SLAVE|REPLICA)\b/, msg: 'Sentencias de replicación no permitidas.' },
+  // SQL dinámico: arma sentencias en tiempo de ejecución, así que este filtro no podría revisarlas.
+  { re: /\bPREPARE\s+\w+\s+FROM\b|\bEXECUTE\s+IMMEDIATE\b/, msg: 'No se permite SQL dinámico (PREPARE / EXECUTE).' },
+  // Los eventos se ejecutan solos en segundo plano, fuera del control de la ejecución.
+  { re: /\b(CREATE|ALTER)\s+(DEFINER\s*=\s*\S+\s+)?EVENT\b/, msg: 'No se permiten eventos programados (CREATE EVENT).' },
 ];
 
 // En modo solo lectura rechazamos todo lo que modifica algo. (No usamos una lista

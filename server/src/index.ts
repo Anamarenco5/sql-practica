@@ -12,6 +12,10 @@ async function main() {
     console.warn('No se pudo conectar a MySQL con el usuario sandbox:', (e as Error).message);
     console.warn('¿Corriste "npm run db:setup"?');
   }
+  // Red de seguridad: cada 10 minutos se borran sandboxes que hayan quedado sueltos.
+  setInterval(() => {
+    cleanupOrphanSandboxes().catch(() => {});
+  }, 10 * 60 * 1000).unref();
   // Al cerrar (Ctrl+C) se borran las copias precalentadas.
   for (const sig of ['SIGINT', 'SIGTERM'] as const) {
     process.on(sig, () => {
