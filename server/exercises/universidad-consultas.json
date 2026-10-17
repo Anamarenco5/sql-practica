@@ -1,0 +1,314 @@
+[
+  {
+    "id": "u-basico-01",
+    "title": "Todas las aulas",
+    "topic": "consultas-basicas",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "statement": "Mostrá **todas las columnas** de todas las aulas de la universidad.",
+    "tables": [
+      "aulas"
+    ],
+    "starterSql": "-- Escribí tu consulta acá\n",
+    "solution": "SELECT * FROM aulas;",
+    "explanation": "`SELECT *` trae todas las columnas en el orden en que fueron definidas en la tabla. Sirve para explorar, pero en un examen (y en producción) conviene listar las columnas que se piden explícitamente.",
+    "hints": [
+      "La estructura mínima de una consulta es SELECT columnas FROM tabla.",
+      "El asterisco (*) significa \"todas las columnas\"."
+    ],
+    "concepts": [
+      "SELECT",
+      "FROM"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-basico-02",
+    "title": "Aulas grandes",
+    "topic": "consultas-basicas",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "statement": "Listá el **nombre** y la **capacidad** de las aulas con capacidad **mayor a 40**, ordenadas de **mayor a menor** capacidad.",
+    "tables": [
+      "aulas"
+    ],
+    "solution": "SELECT nombre, capacidad\nFROM aulas\nWHERE capacidad > 40\nORDER BY capacidad DESC;",
+    "explanation": "El `WHERE` filtra filas **antes** de mostrarlas; el `ORDER BY ... DESC` ordena de mayor a menor. Como el enunciado pide un orden, la corrección también verifica el orden de las filas.",
+    "hints": [
+      "Filtrá con WHERE capacidad > 40.",
+      "Para ordenar de mayor a menor usá ORDER BY columna DESC."
+    ],
+    "concepts": [
+      "WHERE",
+      "ORDER BY",
+      "DESC"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": true,
+      "orderKeys": [
+        1
+      ]
+    }
+  },
+  {
+    "id": "u-tp3-01",
+    "title": "Ingresantes 2023",
+    "topic": "consultas-basicas",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 1",
+    "statement": "Listar los alumnos que ingresaron a la Universidad durante el **año 2023**. Mostrar **id del alumno, nombre, apellido, email y fecha de ingreso**. Ordenar por fecha de ingreso de manera **ascendente**.",
+    "tables": [
+      "alumnos"
+    ],
+    "solution": "SELECT id_alumno, nombre, apellido, email, fecha_ingreso\nFROM alumnos\nWHERE fecha_ingreso BETWEEN '2023-01-01' AND '2023-12-31'\nORDER BY fecha_ingreso ASC;",
+    "explanation": "Hay dos formas típicas de filtrar por año:\n\n- `YEAR(fecha_ingreso) = 2023`: más legible, pero aplica una función a la columna y MySQL no puede usar un índice sobre `fecha_ingreso`.\n- `fecha_ingreso BETWEEN '2023-01-01' AND '2023-12-31'`: compara la columna \"pelada\", por lo que sí puede usar índices (es *sargable*).\n\nAmbas devuelven lo mismo y el corrector acepta las dos. Ojo: si la columna fuera DATETIME, `BETWEEN ... '2023-12-31'` dejaría afuera el 31/12 después de las 00:00; ahí conviene `>= '2023-01-01' AND < '2024-01-01'`.",
+    "hints": [
+      "Necesitás filtrar las filas por la fecha de ingreso.",
+      "Podés usar la función YEAR() o un rango de fechas con BETWEEN.",
+      "No te olvides del ORDER BY fecha_ingreso."
+    ],
+    "concepts": [
+      "WHERE",
+      "YEAR()",
+      "BETWEEN",
+      "ORDER BY"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": true,
+      "orderKeys": [
+        4
+      ]
+    }
+  },
+  {
+    "id": "u-tp3-02",
+    "title": "Carreras presenciales de grado",
+    "topic": "consultas-basicas",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 2",
+    "statement": "Mostrar las carreras **presenciales** de **nivel de grado** cuya duración sea **mayor o igual a 4 años**. Mostrar **nombre, título otorgado, duración en años y carga horaria total**.",
+    "tables": [
+      "carreras"
+    ],
+    "solution": "SELECT nombre, titulo_otorgado, duracion_anios, carga_horaria_total\nFROM carreras\nWHERE modalidad = 'presencial'\n  AND nivel = 'grado'\n  AND duracion_anios >= 4;",
+    "explanation": "Las tres condiciones deben cumplirse a la vez, por eso se combinan con `AND`. Las columnas `modalidad` y `nivel` son `ENUM`: se comparan con el texto exacto de uno de sus valores posibles (podés verlos en el panel de esquema).",
+    "hints": [
+      "Son tres condiciones que se tienen que cumplir juntas.",
+      "Mirá en el esquema los valores posibles de los ENUM modalidad y nivel."
+    ],
+    "concepts": [
+      "WHERE",
+      "AND",
+      "ENUM"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-04",
+    "title": "Nombre completo de docentes",
+    "topic": "consultas-basicas",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 4",
+    "statement": "Listar los docentes que ingresaron **antes del año 2020** y cuyo salario base sea **menor o igual a $400.000**. Mostrar nombre y apellido en una sola columna llamada **`Nombre Completo`** (con un espacio entre ambos), la fecha de ingreso y el salario base.",
+    "tables": [
+      "docentes"
+    ],
+    "solution": "SELECT CONCAT(nombre, ' ', apellido) AS `Nombre Completo`,\n       fecha_ingreso,\n       salario_base\nFROM docentes\nWHERE fecha_ingreso < '2020-01-01'\n  AND salario_base <= 400000;",
+    "explanation": "`CONCAT()` une textos; el espacio `' '` va como un argumento más. El alias con espacios necesita backticks o comillas: `` AS `Nombre Completo` ``. \"Antes de 2020\" significa `fecha_ingreso < '2020-01-01'` (o `YEAR(fecha_ingreso) < 2020`). En este ejercicio el corrector **sí** exige el nombre de la columna.",
+    "hints": [
+      "CONCAT(a, ' ', b) une dos textos con un espacio en el medio.",
+      "Un alias con espacios se escribe entre backticks: AS `Nombre Completo`."
+    ],
+    "concepts": [
+      "CONCAT()",
+      "alias (AS)",
+      "WHERE"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false,
+      "checkColumnNames": true
+    }
+  },
+  {
+    "id": "u-tp3-06",
+    "title": "Asignaturas obligatorias y su departamento",
+    "topic": "joins",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 6",
+    "statement": "Listar las asignaturas junto con el **nombre del departamento** al que pertenecen. Incluir únicamente asignaturas **obligatorias**. Mostrar **asignatura, carga horaria, créditos y departamento**.",
+    "tables": [
+      "asignaturas",
+      "departamentos"
+    ],
+    "solution": "SELECT a.nombre AS asignatura,\n       a.carga_horaria,\n       a.creditos,\n       d.nombre AS departamento\nFROM asignaturas a\nJOIN departamentos d ON d.id_departamento = a.id_departamento\nWHERE a.es_obligatoria = 1;",
+    "explanation": "El nombre del departamento está en otra tabla, así que hace falta un `JOIN` usando la clave foránea `asignaturas.id_departamento → departamentos.id_departamento`. Como ambas tablas tienen una columna `nombre`, hay que calificarla (`a.nombre`, `d.nombre`) para evitar el error de columna ambigua (1052). `es_obligatoria` es `TINYINT(1)`: 1 = verdadero.",
+    "hints": [
+      "El nombre del departamento está en la tabla departamentos.",
+      "Uní las tablas con JOIN ... ON usando id_departamento.",
+      "Ambas tablas tienen una columna nombre: usá alias de tabla (a.nombre, d.nombre)."
+    ],
+    "concepts": [
+      "INNER JOIN",
+      "alias de tabla",
+      "clave foránea"
+    ],
+    "requirements": [
+      {
+        "pattern": "\\bJOIN\\b|\\bFROM\\b[^;]*,",
+        "message": "Este ejercicio es para practicar JOIN: combiná las dos tablas."
+      }
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-07",
+    "title": "Comisiones prácticas 2025",
+    "topic": "joins",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 7",
+    "statement": "Mostrar las comisiones **prácticas** del **año 2025** con el **id de la comisión**, el **nombre de la asignatura**, el **apellido del docente** y el **nombre del aula** asignada.",
+    "tables": [
+      "comisiones",
+      "asignaturas",
+      "docentes",
+      "aulas"
+    ],
+    "solution": "SELECT c.id_comision,\n       a.nombre AS asignatura,\n       d.apellido AS docente,\n       au.nombre AS aula\nFROM comisiones c\nJOIN asignaturas a ON a.id_asignatura = c.id_asignatura\nJOIN docentes d    ON d.id_docente    = c.id_docente\nJOIN aulas au      ON au.id_aula      = c.id_aula\nWHERE c.tipo = 'practica'\n  AND c.anio = 2025;",
+    "explanation": "`comisiones` es la tabla central: tiene tres claves foráneas (asignatura, docente, aula). Cada `JOIN` agrega una tabla usando una de esas FK. Los filtros (`tipo`, `anio`) se aplican sobre la comisión.",
+    "hints": [
+      "Empezá desde la tabla comisiones: tiene las FK a asignatura, docente y aula.",
+      "Necesitás tres JOIN.",
+      "El ENUM tipo de comisiones tiene los valores 'teorica' y 'practica' (sin tilde)."
+    ],
+    "concepts": [
+      "JOIN múltiple",
+      "claves foráneas"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-09",
+    "title": "Comisiones por año y cuatrimestre",
+    "topic": "agregacion",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 9",
+    "statement": "Calcular la **cantidad de comisiones** por **año y cuatrimestre**. Mostrar año, cuatrimestre y cantidad de comisiones. Ordenar por año y cuatrimestre.",
+    "tables": [
+      "comisiones"
+    ],
+    "solution": "SELECT anio, cuatrimestre, COUNT(*) AS cantidad_comisiones\nFROM comisiones\nGROUP BY anio, cuatrimestre\nORDER BY anio, cuatrimestre;",
+    "explanation": "`GROUP BY anio, cuatrimestre` forma un grupo por cada combinación distinta de esas dos columnas y `COUNT(*)` cuenta las filas de cada grupo. Regla de oro (ONLY_FULL_GROUP_BY): toda columna del SELECT que no esté en una función de agregación tiene que estar en el GROUP BY.",
+    "hints": [
+      "Agrupá por las dos columnas a la vez.",
+      "COUNT(*) cuenta las filas de cada grupo."
+    ],
+    "concepts": [
+      "GROUP BY",
+      "COUNT()",
+      "ORDER BY"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": true,
+      "orderKeys": [
+        0,
+        1
+      ]
+    }
+  },
+  {
+    "id": "u-tp3-16",
+    "title": "Alumnos sin carrera",
+    "topic": "left-join",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 16",
+    "statement": "Secretaría académica necesita detectar alumnos cargados en el sistema que **todavía no tienen ninguna carrera asociada**. Mostrar **id, nombre, apellido, email, teléfono y fecha de ingreso** de esos alumnos.",
+    "tables": [
+      "alumnos",
+      "alumno_carrera"
+    ],
+    "solution": "SELECT a.id_alumno, a.nombre, a.apellido, a.email, a.telefono, a.fecha_ingreso\nFROM alumnos a\nLEFT JOIN alumno_carrera ac ON ac.id_alumno = a.id_alumno\nWHERE ac.id_alumno IS NULL;",
+    "explanation": "Patrón **anti-join**: el `LEFT JOIN` conserva todos los alumnos; los que no tienen fila en `alumno_carrera` quedan con NULL en las columnas de esa tabla, y el `WHERE ac.id_alumno IS NULL` se queda solo con ellos.\n\nAlternativas equivalentes (el corrector las acepta):\n\n```sql\nWHERE a.id_alumno NOT IN (SELECT id_alumno FROM alumno_carrera)\nWHERE NOT EXISTS (SELECT 1 FROM alumno_carrera ac WHERE ac.id_alumno = a.id_alumno)\n```\n\nCuidado con `NOT IN`: si la subconsulta devolviera algún NULL, el resultado sería vacío.",
+    "hints": [
+      "Un INNER JOIN solo devuelve alumnos que SÍ tienen carrera. ¿Qué JOIN conserva a todos?",
+      "Después del LEFT JOIN, ¿qué valor tienen las columnas de alumno_carrera para un alumno sin carrera?",
+      "Filtrá con WHERE ... IS NULL (no con = NULL)."
+    ],
+    "concepts": [
+      "LEFT JOIN",
+      "IS NULL",
+      "anti-join",
+      "NOT EXISTS"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-21",
+    "title": "Docentes sobre el salario promedio",
+    "topic": "subconsultas",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 21",
+    "statement": "Recursos humanos quiere identificar a los docentes cuyo **salario base sea superior al salario promedio general** de todos los docentes. Mostrar **id, nombre, apellido, salario base** y, en una cuarta columna, el **salario promedio general redondeado a 2 decimales** para poder compararlo.",
+    "tables": [
+      "docentes"
+    ],
+    "solution": "SELECT id_docente, nombre, apellido, salario_base,\n       (SELECT ROUND(AVG(salario_base), 2) FROM docentes) AS salario_promedio\nFROM docentes\nWHERE salario_base > (SELECT AVG(salario_base) FROM docentes);",
+    "explanation": "No se puede escribir `WHERE salario_base > AVG(salario_base)`: las funciones de agregación no van en el WHERE (error 1111). La solución es una **subconsulta escalar** (devuelve una sola fila y una sola columna) que calcula el promedio una vez. La misma subconsulta puede usarse en el SELECT para mostrar el valor de referencia.",
+    "hints": [
+      "¿Por qué no funciona AVG() directamente en el WHERE?",
+      "Calculá el promedio en una subconsulta: (SELECT AVG(salario_base) FROM docentes).",
+      "Podés repetir la subconsulta en el SELECT para mostrar el promedio, envuelta en ROUND(..., 2)."
+    ],
+    "concepts": [
+      "subconsulta escalar",
+      "AVG()",
+      "ROUND()"
+    ],
+    "requirements": [
+      {
+        "pattern": "\\(\\s*SELECT",
+        "message": "Resolvelo con una subconsulta (SELECT dentro de otra consulta)."
+      }
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  }
+]

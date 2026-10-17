@@ -1,0 +1,9 @@
+{
+  "id": "universidad",
+  "name": "Universidad",
+  "description": "Base de datos Universidad de los trabajos prácticos (alumnos, carreras, asignaturas, comisiones, docentes, exámenes, notas, mesas de finales).",
+  "script": "universidad.sql",
+  "sandbox": {
+    "skipData": ["asistencias"]
+  }
+}

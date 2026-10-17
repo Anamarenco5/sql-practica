@@ -1,0 +1,74 @@
+[
+  {
+    "id": "u-dml-01",
+    "title": "Aumento salarial en Salud",
+    "topic": "dml",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "statement": "Se aprobó un **aumento del 10%** en el salario base de **todos los docentes del departamento \"Salud\"**. Escribí la sentencia que aplique el aumento.\n\nNo uses el id del departamento escrito a mano: obtenelo a partir de su **nombre**.\n\n> Trabajás sobre una **copia temporal** de la base: podés probar todas las veces que quieras.",
+    "tables": ["docentes", "departamentos"],
+    "solution": "UPDATE docentes\nSET salario_base = salario_base * 1.10\nWHERE id_departamento = (\n  SELECT id_departamento FROM departamentos WHERE nombre = 'Salud'\n);",
+    "explanation": "`UPDATE ... SET ... WHERE` modifica solo las filas que cumplen la condición. Sin `WHERE`, el aumento se aplicaría a **todos** los docentes.\n\nPara no depender del id escrito a mano, la condición usa una subconsulta que busca el id por nombre. Otra forma válida es un UPDATE con JOIN (propio de MySQL):\n\n```sql\nUPDATE docentes d\nJOIN departamentos dep ON dep.id_departamento = d.id_departamento\nSET d.salario_base = d.salario_base * 1.10\nWHERE dep.nombre = 'Salud';\n```\n\nConsejo de examen: antes de un UPDATE o DELETE, probá el mismo WHERE con un SELECT para ver qué filas vas a tocar.",
+    "hints": ["La sentencia es UPDATE tabla SET columna = nueva_expresion WHERE condicion.", "Aumentar un 10% es multiplicar por 1.10.", "El id del departamento lo podés obtener con una subconsulta sobre departamentos."],
+    "concepts": ["UPDATE", "subconsulta", "UPDATE con JOIN"],
+    "requirements": [
+      { "pattern": "\\bUPDATE\\b", "message": "Usá una sentencia UPDATE." },
+      { "pattern": "Salud", "message": "Filtrá el departamento por su nombre ('Salud'), no por el id." }
+    ],
+    "check": {
+      "type": "state",
+      "verifyQueries": ["SELECT id_docente, salario_base FROM docentes"]
+    }
+  },
+  {
+    "id": "u-tp4-01",
+    "title": "Notas entre 0 y 10",
+    "topic": "restricciones",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 1",
+    "statement": "El área de evaluación académica detectó notas cargadas con valores negativos o mayores al máximo permitido.\n\n**Nunca una nota podrá ser menor que 0 ni mayor que 10.**\n\nAgregá a la tabla `notas` una restricción que lo garantice. Se van a probar inserciones y actualizaciones válidas e inválidas.",
+    "tables": ["notas"],
+    "solution": "ALTER TABLE notas\n  ADD CONSTRAINT chk_notas_rango CHECK (nota BETWEEN 0 AND 10);",
+    "explanation": "Una restricción `CHECK` define una condición que **toda fila** debe cumplir; MySQL (desde 8.0.16) la valida en cada INSERT y UPDATE y rechaza la operación con el error 3819 si no se cumple.\n\n- Ponerle nombre (`CONSTRAINT chk_notas_rango`) permite borrarla después con `ALTER TABLE notas DROP CHECK chk_notas_rango`.\n- Si alguna fila existente violara la condición, el `ALTER TABLE` fallaría: primero habría que corregir los datos.\n- Ojo con NULL: un CHECK solo rechaza cuando la condición da FALSE; si `nota` es NULL la condición da UNKNOWN y la fila se acepta.\n\nTambién se podría resolver con un trigger `BEFORE INSERT` + `BEFORE UPDATE` que haga `SIGNAL`, pero para una regla sobre una sola fila el `CHECK` es lo más simple y declarativo.",
+    "hints": ["Es una restricción de integridad de dominio sobre una columna.", "Se agrega con ALTER TABLE notas ADD CONSTRAINT nombre CHECK (condicion).", "BETWEEN incluye los extremos: nota BETWEEN 0 AND 10."],
+    "concepts": ["CHECK", "ALTER TABLE", "integridad de dominio"],
+    "check": {
+      "type": "state",
+      "probes": [
+        { "description": "Insertar una nota de 11", "sql": "INSERT INTO notas (id_examen, id_alumno, nota, aprobado) VALUES (1, 477, 11, 1)", "expect": "error" },
+        { "description": "Insertar una nota de -0.5", "sql": "INSERT INTO notas (id_examen, id_alumno, nota, aprobado) VALUES (1, 477, -0.5, 0)", "expect": "error" },
+        { "description": "Actualizar una nota a 10.5", "sql": "UPDATE notas SET nota = 10.5 WHERE id_nota = 1", "expect": "error" },
+        { "description": "Insertar una nota de 7 (válida)", "sql": "INSERT INTO notas (id_examen, id_alumno, nota, aprobado) VALUES (1, 477, 7, 1)", "expect": "ok" },
+        { "description": "Insertar una nota de 0 (límite válido)", "sql": "INSERT INTO notas (id_examen, id_alumno, nota, aprobado) VALUES (1, 199, 0, 0)", "expect": "ok" },
+        { "description": "Insertar una nota de 10 (límite válido)", "sql": "INSERT INTO notas (id_examen, id_alumno, nota, aprobado) VALUES (1, 405, 10, 1)", "expect": "ok" }
+      ]
+    }
+  },
+  {
+    "id": "u-trigger-01",
+    "title": "Aprobado automático",
+    "topic": "triggers",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "statement": "Para no depender de la carga manual, la columna `notas.aprobado` debe calcularse **sola**: vale **1 si la nota es mayor o igual a 4** y **0 en caso contrario**.\n\nCreá los **triggers** necesarios para que esto se cumpla tanto al **insertar** como al **modificar** una nota, sin importar el valor de `aprobado` que se envíe.\n\nPodés usar `DELIMITER` como en Workbench.",
+    "tables": ["notas"],
+    "starterSql": "DELIMITER $$\n\n-- tu trigger acá\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE TRIGGER trg_notas_aprobado_ins\nBEFORE INSERT ON notas\nFOR EACH ROW\nBEGIN\n  SET NEW.aprobado = (NEW.nota >= 4);\nEND $$\n\nCREATE TRIGGER trg_notas_aprobado_upd\nBEFORE UPDATE ON notas\nFOR EACH ROW\nBEGIN\n  SET NEW.aprobado = (NEW.nota >= 4);\nEND $$\n\nDELIMITER ;",
+    "explanation": "- Tiene que ser **BEFORE**: en un trigger AFTER la fila ya se guardó y `NEW` es de solo lectura.\n- `NEW` representa la fila que se va a guardar; asignar `NEW.aprobado` cambia lo que se inserta. No hace falta (ni se puede) hacer un `UPDATE notas` dentro del trigger de la misma tabla (error 1442).\n- Hacen falta **dos** triggers: uno por evento (INSERT y UPDATE). En MySQL cada trigger responde a un solo evento.\n- `(NEW.nota >= 4)` ya devuelve 1 o 0. Equivalente: `IF NEW.nota >= 4 THEN SET NEW.aprobado = 1; ELSE SET NEW.aprobado = 0; END IF;`\n- `DELIMITER $$` le dice al cliente que la sentencia termina en `$$`, para que los `;` del cuerpo no la corten.",
+    "hints": ["¿El trigger tiene que ejecutarse antes o después de guardar la fila para poder cambiar sus valores?", "Dentro del trigger, NEW.columna es el valor que se va a guardar. Podés asignarlo con SET NEW.aprobado = ...", "Necesitás un trigger para INSERT y otro para UPDATE."],
+    "concepts": ["TRIGGER", "BEFORE INSERT", "BEFORE UPDATE", "NEW", "DELIMITER"],
+    "requirements": [{ "pattern": "CREATE\\s+TRIGGER", "message": "Resolvelo con triggers (CREATE TRIGGER)." }],
+    "check": {
+      "type": "state",
+      "verifyQueries": [
+        "INSERT INTO notas (id_examen, id_alumno, nota, aprobado) VALUES (1, 477, 3.99, 1);\nSELECT nota, aprobado FROM notas WHERE id_examen = 1 AND id_alumno = 477",
+        "INSERT INTO notas (id_examen, id_alumno, nota, aprobado) VALUES (1, 199, 4, 0);\nSELECT nota, aprobado FROM notas WHERE id_examen = 1 AND id_alumno = 199",
+        "UPDATE notas SET nota = 8 WHERE id_nota = 2;\nUPDATE notas SET nota = 2 WHERE id_nota = 3;\nSELECT id_nota, nota, aprobado FROM notas WHERE id_nota IN (2, 3)"
+      ]
+    }
+  }
+]
