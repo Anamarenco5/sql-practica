@@ -1,0 +1,786 @@
+[
+  {
+    "id": "u-tp5-01",
+    "title": "Inscribir con validaciones",
+    "topic": "transacciones",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP5 Ej. 1",
+    "statement": "Según las indicaciones del TP5: el procedimiento debe ejecutarse como **una única transacción**; ante un error hace **ROLLBACK** y relanza el error con **RESIGNAL**; si todo sale bien, **COMMIT**. Las validaciones fallidas deben producir un error (`SIGNAL`).\n\nCreá **`sp_inscribir_alumno_comision_tx(p_id_alumno, p_id_comision)`** que verifique:\n\n- que la comisión exista,\n- que el alumno no esté ya inscripto en ella,\n- que haya cupo disponible (todas las inscripciones de la comisión cuentan como ocupadas),\n\ny si todo está bien inserte la inscripción con fecha actual y estado `'Cursa'`.",
+    "tables": [
+      "inscripcion_alumno_comision",
+      "comisiones"
+    ],
+    "starterSql": "DELIMITER $$\n\nCREATE PROCEDURE nombre (\n  -- parámetros\n)\nBEGIN\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  -- validaciones y operaciones\n\n  COMMIT;\nEND $$\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE PROCEDURE sp_inscribir_alumno_comision_tx (\n  IN p_id_alumno INT,\n  IN p_id_comision INT\n)\nBEGIN\n  DECLARE v_cupo INT;\n  DECLARE v_inscriptos INT;\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  SELECT cupo INTO v_cupo FROM comisiones WHERE id_comision = p_id_comision FOR UPDATE;\n  IF v_cupo IS NULL THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La comision no existe';\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM inscripcion_alumno_comision\n             WHERE id_alumno = p_id_alumno AND id_comision = p_id_comision) THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El alumno ya esta inscripto en la comision';\n  END IF;\n\n  SELECT COUNT(*) INTO v_inscriptos\n  FROM inscripcion_alumno_comision\n  WHERE id_comision = p_id_comision;\n  IF v_inscriptos >= v_cupo THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No hay cupo disponible';\n  END IF;\n\n  INSERT INTO inscripcion_alumno_comision (id_alumno, id_comision, fecha_inscripcion, estado)\n  VALUES (p_id_alumno, p_id_comision, CURDATE(), 'Cursa');\n\n  COMMIT;\nEND $$\n\nDELIMITER ;",
+    "explanation": "Si la comisión no existe, `SELECT cupo INTO v_cupo` no encuentra filas y la variable queda en NULL (MySQL además emite una advertencia, no un error). Por eso se valida con `IS NULL`.\n\n`FOR UPDATE` bloquea la fila de la comisión hasta el COMMIT: si dos personas se inscriben a la vez en el último lugar, la segunda espera y ve el conteo actualizado. Sin ese bloqueo podría superarse el cupo (condición de carrera).\n\n**Esqueleto de todos los ejercicios del TP5:**\n\n```sql\nDECLARE EXIT HANDLER FOR SQLEXCEPTION\nBEGIN\n  ROLLBACK;   -- deshace todo lo hecho desde START TRANSACTION\n  RESIGNAL;   -- relanza el error para que quien llamó se entere\nEND;\n\nSTART TRANSACTION;\n  -- validaciones: IF ... THEN SIGNAL SQLSTATE '45000' ...; END IF;\n  -- operaciones\nCOMMIT;\n```\n\n- Un `SIGNAL` dentro del bloque también es una SQLEXCEPTION, así que lo atrapa el mismo handler: hace ROLLBACK y RESIGNAL relanza el mensaje original.\n- Sin `RESIGNAL`, el procedimiento terminaría \"bien\" y el error quedaría silenciado.\n- Los `DECLARE` van al principio del BEGIN, en este orden: variables, condiciones/cursores y al final handlers (error 1337 si no).\n- Propiedades ACID: la **atomicidad** (todo o nada) la da el par COMMIT/ROLLBACK.",
+    "hints": [
+      "Guardá el cupo en una variable con SELECT ... INTO y verificá si quedó NULL.",
+      "Validá duplicado con EXISTS y cupo con COUNT(*).",
+      "Cada validación fallida: SIGNAL SQLSTATE '45000'."
+    ],
+    "concepts": [
+      "transacción",
+      "EXIT HANDLER",
+      "ROLLBACK",
+      "RESIGNAL",
+      "SELECT INTO",
+      "FOR UPDATE"
+    ],
+    "requirements": [
+      {
+        "pattern": "START\\s+TRANSACTION",
+        "message": "La operación tiene que ser una transacción (START TRANSACTION)."
+      },
+      {
+        "pattern": "\\bCOMMIT\\b",
+        "message": "Confirmá la transacción con COMMIT."
+      },
+      {
+        "pattern": "DECLARE\\s+EXIT\\s+HANDLER\\s+FOR\\s+SQLEXCEPTION",
+        "message": "Declará un EXIT HANDLER FOR SQLEXCEPTION."
+      },
+      {
+        "pattern": "\\bROLLBACK\\b",
+        "message": "El handler tiene que hacer ROLLBACK."
+      },
+      {
+        "pattern": "\\bRESIGNAL\\b",
+        "message": "El handler tiene que relanzar el error con RESIGNAL."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Inscribir en una comisión inexistente",
+          "sql": "CALL sp_inscribir_alumno_comision_tx(1, 999999)",
+          "expect": "error"
+        },
+        {
+          "description": "Inscribir a alguien que ya está inscripto",
+          "sql": "CALL sp_inscribir_alumno_comision_tx(124, 1)",
+          "expect": "error"
+        },
+        {
+          "description": "Inscribir en una comisión sin cupo (1163)",
+          "sql": "CALL sp_inscribir_alumno_comision_tx(1, 1163)",
+          "expect": "error"
+        },
+        {
+          "description": "Inscribir correctamente",
+          "sql": "CALL sp_inscribir_alumno_comision_tx(1, 1)",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": [
+        "SELECT id_alumno, id_comision, fecha_inscripcion = CURDATE() AS hoy, estado FROM inscripcion_alumno_comision WHERE id_alumno = 1 OR id_comision = 1163"
+      ]
+    }
+  },
+  {
+    "id": "u-tp5-02",
+    "title": "Registrar nota de examen",
+    "topic": "transacciones",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP5 Ej. 2",
+    "statement": "Según las indicaciones del TP5: el procedimiento debe ejecutarse como **una única transacción**; ante un error hace **ROLLBACK** y relanza el error con **RESIGNAL**; si todo sale bien, **COMMIT**. Las validaciones fallidas deben producir un error (`SIGNAL`).\n\nCreá **`sp_registrar_nota_tx(p_id_alumno, p_id_examen, p_nota)`** que verifique:\n\n- que la nota esté entre 0 y 10,\n- que el examen exista,\n- que el alumno esté inscripto en la comisión del examen,\n- que no tenga ya una nota en ese examen.\n\nSi corresponde, insertá la nota con `aprobado` = 1 si es ≥ 4 (si no, 0) y actualizá el estado de la inscripción del alumno en esa comisión a **`'Aprobada'`** (nota ≥ 4) o **`'Regular'`** (nota < 4).",
+    "tables": [
+      "notas",
+      "examenes",
+      "inscripcion_alumno_comision"
+    ],
+    "starterSql": "DELIMITER $$\n\nCREATE PROCEDURE nombre (\n  -- parámetros\n)\nBEGIN\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  -- validaciones y operaciones\n\n  COMMIT;\nEND $$\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE PROCEDURE sp_registrar_nota_tx (\n  IN p_id_alumno INT,\n  IN p_id_examen INT,\n  IN p_nota DECIMAL(4,2)\n)\nBEGIN\n  DECLARE v_id_comision INT;\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  IF p_nota < 0 OR p_nota > 10 THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La nota debe estar entre 0 y 10';\n  END IF;\n\n  SELECT id_comision INTO v_id_comision FROM examenes WHERE id_examen = p_id_examen;\n  IF v_id_comision IS NULL THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El examen no existe';\n  END IF;\n\n  IF NOT EXISTS (SELECT 1 FROM inscripcion_alumno_comision\n                 WHERE id_alumno = p_id_alumno AND id_comision = v_id_comision) THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El alumno no esta inscripto en la comision del examen';\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM notas WHERE id_alumno = p_id_alumno AND id_examen = p_id_examen) THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El alumno ya tiene nota en este examen';\n  END IF;\n\n  INSERT INTO notas (id_examen, id_alumno, nota, aprobado)\n  VALUES (p_id_examen, p_id_alumno, p_nota, p_nota >= 4);\n\n  UPDATE inscripcion_alumno_comision\n  SET estado = IF(p_nota >= 4, 'Aprobada', 'Regular')\n  WHERE id_alumno = p_id_alumno AND id_comision = v_id_comision;\n\n  COMMIT;\nEND $$\n\nDELIMITER ;",
+    "explanation": "Acá la transacción importa de verdad: hay **dos escrituras** (INSERT en notas y UPDATE en la inscripción). Si la segunda fallara, sin transacción quedaría una nota registrada con un estado de inscripción viejo. Con ROLLBACK se deshacen las dos.\n\n`IF(condición, valor_si, valor_no)` es la función condicional de MySQL; también vale `CASE WHEN ... END`.\n\n**Esqueleto de todos los ejercicios del TP5:**\n\n```sql\nDECLARE EXIT HANDLER FOR SQLEXCEPTION\nBEGIN\n  ROLLBACK;   -- deshace todo lo hecho desde START TRANSACTION\n  RESIGNAL;   -- relanza el error para que quien llamó se entere\nEND;\n\nSTART TRANSACTION;\n  -- validaciones: IF ... THEN SIGNAL SQLSTATE '45000' ...; END IF;\n  -- operaciones\nCOMMIT;\n```\n\n- Un `SIGNAL` dentro del bloque también es una SQLEXCEPTION, así que lo atrapa el mismo handler: hace ROLLBACK y RESIGNAL relanza el mensaje original.\n- Sin `RESIGNAL`, el procedimiento terminaría \"bien\" y el error quedaría silenciado.\n- Los `DECLARE` van al principio del BEGIN, en este orden: variables, condiciones/cursores y al final handlers (error 1337 si no).\n- Propiedades ACID: la **atomicidad** (todo o nada) la da el par COMMIT/ROLLBACK.",
+    "hints": [
+      "Primero obtené la comisión del examen (SELECT ... INTO).",
+      "Validá inscripción con EXISTS sobre esa comisión.",
+      "Son dos operaciones: INSERT en notas y UPDATE del estado."
+    ],
+    "concepts": [
+      "transacción",
+      "EXIT HANDLER",
+      "ROLLBACK",
+      "RESIGNAL",
+      "validaciones múltiples",
+      "IF()"
+    ],
+    "requirements": [
+      {
+        "pattern": "START\\s+TRANSACTION",
+        "message": "La operación tiene que ser una transacción (START TRANSACTION)."
+      },
+      {
+        "pattern": "\\bCOMMIT\\b",
+        "message": "Confirmá la transacción con COMMIT."
+      },
+      {
+        "pattern": "DECLARE\\s+EXIT\\s+HANDLER\\s+FOR\\s+SQLEXCEPTION",
+        "message": "Declará un EXIT HANDLER FOR SQLEXCEPTION."
+      },
+      {
+        "pattern": "\\bROLLBACK\\b",
+        "message": "El handler tiene que hacer ROLLBACK."
+      },
+      {
+        "pattern": "\\bRESIGNAL\\b",
+        "message": "El handler tiene que relanzar el error con RESIGNAL."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Nota fuera de rango (11)",
+          "sql": "CALL sp_registrar_nota_tx(477, 1, 11)",
+          "expect": "error"
+        },
+        {
+          "description": "Examen inexistente",
+          "sql": "CALL sp_registrar_nota_tx(477, 999999, 7)",
+          "expect": "error"
+        },
+        {
+          "description": "Alumno no inscripto en la comisión del examen",
+          "sql": "CALL sp_registrar_nota_tx(1, 1, 7)",
+          "expect": "error"
+        },
+        {
+          "description": "Registrar un 7.5 (aprueba)",
+          "sql": "CALL sp_registrar_nota_tx(477, 1, 7.5)",
+          "expect": "ok"
+        },
+        {
+          "description": "Registrar otra nota en el mismo examen",
+          "sql": "CALL sp_registrar_nota_tx(477, 1, 9)",
+          "expect": "error"
+        },
+        {
+          "description": "Registrar un 2 (no aprueba)",
+          "sql": "CALL sp_registrar_nota_tx(199, 1, 2)",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": [
+        "SELECT id_alumno, nota, aprobado FROM notas WHERE id_examen = 1 AND id_alumno IN (1, 199, 477)",
+        "SELECT id_alumno, estado FROM inscripcion_alumno_comision WHERE id_comision = 180 AND id_alumno IN (199, 477)"
+      ]
+    }
+  },
+  {
+    "id": "u-tp5-03",
+    "title": "Dar de baja con auditoría",
+    "topic": "transacciones",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP5 Ej. 3",
+    "statement": "Según las indicaciones del TP5: el procedimiento debe ejecutarse como **una única transacción**; ante un error hace **ROLLBACK** y relanza el error con **RESIGNAL**; si todo sale bien, **COMMIT**. Las validaciones fallidas deben producir un error (`SIGNAL`).\n\nCreá la tabla **`auditoria_bajas_comision`** con las columnas: `id_auditoria`, `id_inscripcion`, `id_alumno`, `id_comision`, `estado_anterior`, `motivo`, `fecha_baja` (`id_auditoria` INT AUTO_INCREMENT PK; la fecha DATETIME). Se verifican por nombre.\n\nCreá **`sp_dar_baja_inscripcion_tx(p_id_inscripcion, p_motivo)`** que verifique que la inscripción exista y que no esté ya en estado `'Baja'`. Antes de modificarla, debe guardar en la auditoría el alumno, la comisión, el estado anterior, el motivo y la fecha; luego cambia el estado a `'Baja'`.",
+    "tables": [
+      "inscripcion_alumno_comision"
+    ],
+    "starterSql": "DELIMITER $$\n\nCREATE PROCEDURE nombre (\n  -- parámetros\n)\nBEGIN\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  -- validaciones y operaciones\n\n  COMMIT;\nEND $$\n\nDELIMITER ;\n",
+    "solution": "CREATE TABLE auditoria_bajas_comision (\n  id_auditoria    INT AUTO_INCREMENT PRIMARY KEY,\n  id_inscripcion  INT,\n  id_alumno       INT,\n  id_comision     INT,\n  estado_anterior VARCHAR(20),\n  motivo          VARCHAR(255),\n  fecha_baja      DATETIME\n);\n\nDELIMITER $$\n\nCREATE PROCEDURE sp_dar_baja_inscripcion_tx (\n  IN p_id_inscripcion INT,\n  IN p_motivo VARCHAR(255)\n)\nBEGIN\n  DECLARE v_id_alumno INT;\n  DECLARE v_id_comision INT;\n  DECLARE v_estado VARCHAR(20);\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  SELECT id_alumno, id_comision, estado\n    INTO v_id_alumno, v_id_comision, v_estado\n  FROM inscripcion_alumno_comision\n  WHERE id_inscripcion = p_id_inscripcion\n  FOR UPDATE;\n\n  IF v_id_alumno IS NULL THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La inscripcion no existe';\n  END IF;\n  IF v_estado = 'Baja' THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La inscripcion ya esta dada de baja';\n  END IF;\n\n  INSERT INTO auditoria_bajas_comision (id_inscripcion, id_alumno, id_comision, estado_anterior, motivo, fecha_baja)\n  VALUES (p_id_inscripcion, v_id_alumno, v_id_comision, v_estado, p_motivo, NOW());\n\n  UPDATE inscripcion_alumno_comision\n  SET estado = 'Baja'\n  WHERE id_inscripcion = p_id_inscripcion;\n\n  COMMIT;\nEND $$\n\nDELIMITER ;",
+    "explanation": "`SELECT col1, col2, col3 INTO v1, v2, v3` carga varias variables en una sola consulta. La auditoría se inserta **antes** del UPDATE porque necesita el estado anterior (aunque ya está guardado en `v_estado`). Si el UPDATE fallara, el ROLLBACK también borra la fila de auditoría: no queda registro de una baja que no ocurrió.\n\n**Esqueleto de todos los ejercicios del TP5:**\n\n```sql\nDECLARE EXIT HANDLER FOR SQLEXCEPTION\nBEGIN\n  ROLLBACK;   -- deshace todo lo hecho desde START TRANSACTION\n  RESIGNAL;   -- relanza el error para que quien llamó se entere\nEND;\n\nSTART TRANSACTION;\n  -- validaciones: IF ... THEN SIGNAL SQLSTATE '45000' ...; END IF;\n  -- operaciones\nCOMMIT;\n```\n\n- Un `SIGNAL` dentro del bloque también es una SQLEXCEPTION, así que lo atrapa el mismo handler: hace ROLLBACK y RESIGNAL relanza el mensaje original.\n- Sin `RESIGNAL`, el procedimiento terminaría \"bien\" y el error quedaría silenciado.\n- Los `DECLARE` van al principio del BEGIN, en este orden: variables, condiciones/cursores y al final handlers (error 1337 si no).\n- Propiedades ACID: la **atomicidad** (todo o nada) la da el par COMMIT/ROLLBACK.",
+    "hints": [
+      "Leé alumno, comisión y estado de la inscripción en variables.",
+      "Validá existencia (IS NULL) y que no sea 'Baja'.",
+      "INSERT en auditoría y después UPDATE del estado."
+    ],
+    "concepts": [
+      "transacción",
+      "EXIT HANDLER",
+      "ROLLBACK",
+      "RESIGNAL",
+      "auditoría",
+      "SELECT INTO múltiple"
+    ],
+    "requirements": [
+      {
+        "pattern": "START\\s+TRANSACTION",
+        "message": "La operación tiene que ser una transacción (START TRANSACTION)."
+      },
+      {
+        "pattern": "\\bCOMMIT\\b",
+        "message": "Confirmá la transacción con COMMIT."
+      },
+      {
+        "pattern": "DECLARE\\s+EXIT\\s+HANDLER\\s+FOR\\s+SQLEXCEPTION",
+        "message": "Declará un EXIT HANDLER FOR SQLEXCEPTION."
+      },
+      {
+        "pattern": "\\bROLLBACK\\b",
+        "message": "El handler tiene que hacer ROLLBACK."
+      },
+      {
+        "pattern": "\\bRESIGNAL\\b",
+        "message": "El handler tiene que relanzar el error con RESIGNAL."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Dar de baja una inscripción inexistente",
+          "sql": "CALL sp_dar_baja_inscripcion_tx(999999, 'Prueba')",
+          "expect": "error"
+        },
+        {
+          "description": "Dar de baja una inscripción ya dada de baja (8)",
+          "sql": "CALL sp_dar_baja_inscripcion_tx(8, 'Prueba')",
+          "expect": "error"
+        },
+        {
+          "description": "Dar de baja la inscripción 1",
+          "sql": "CALL sp_dar_baja_inscripcion_tx(1, 'Cambio de horario')",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": [
+        "SELECT id_inscripcion, id_alumno, id_comision, estado_anterior, motivo, DATE(fecha_baja) = CURDATE() AS hoy FROM auditoria_bajas_comision",
+        "SELECT id_inscripcion, estado FROM inscripcion_alumno_comision WHERE id_inscripcion IN (1, 8)"
+      ]
+    }
+  },
+  {
+    "id": "u-tp5-04",
+    "title": "Crear comisión validando el aula",
+    "topic": "transacciones",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP5 Ej. 4",
+    "statement": "Según las indicaciones del TP5: el procedimiento debe ejecutarse como **una única transacción**; ante un error hace **ROLLBACK** y relanza el error con **RESIGNAL**; si todo sale bien, **COMMIT**. Las validaciones fallidas deben producir un error (`SIGNAL`).\n\nCreá **`sp_crear_comision_tx(p_id_asignatura, p_id_docente, p_id_aula, p_anio, p_cuatrimestre, p_cupo, p_tipo)`** que verifique que el cupo sea mayor que cero, que el aula exista y que su capacidad alcance para el cupo. Si todo está bien, inserta la comisión.",
+    "tables": [
+      "comisiones",
+      "aulas"
+    ],
+    "starterSql": "DELIMITER $$\n\nCREATE PROCEDURE nombre (\n  -- parámetros\n)\nBEGIN\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  -- validaciones y operaciones\n\n  COMMIT;\nEND $$\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE PROCEDURE sp_crear_comision_tx (\n  IN p_id_asignatura INT,\n  IN p_id_docente INT,\n  IN p_id_aula INT,\n  IN p_anio INT,\n  IN p_cuatrimestre INT,\n  IN p_cupo INT,\n  IN p_tipo VARCHAR(20)\n)\nBEGIN\n  DECLARE v_capacidad INT;\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  IF p_cupo IS NULL OR p_cupo <= 0 THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El cupo debe ser mayor que cero';\n  END IF;\n\n  SELECT capacidad INTO v_capacidad FROM aulas WHERE id_aula = p_id_aula;\n  IF v_capacidad IS NULL THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El aula no existe';\n  END IF;\n  IF v_capacidad < p_cupo THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La capacidad del aula no alcanza para el cupo';\n  END IF;\n\n  INSERT INTO comisiones (id_asignatura, id_docente, id_aula, anio, cuatrimestre, cupo, tipo)\n  VALUES (p_id_asignatura, p_id_docente, p_id_aula, p_anio, p_cuatrimestre, p_cupo, p_tipo);\n\n  COMMIT;\nEND $$\n\nDELIMITER ;",
+    "explanation": "Las validaciones de dominio (cupo > 0) se pueden hacer antes de leer datos. La de capacidad necesita leer el aula primero.\n\n**Esqueleto de todos los ejercicios del TP5:**\n\n```sql\nDECLARE EXIT HANDLER FOR SQLEXCEPTION\nBEGIN\n  ROLLBACK;   -- deshace todo lo hecho desde START TRANSACTION\n  RESIGNAL;   -- relanza el error para que quien llamó se entere\nEND;\n\nSTART TRANSACTION;\n  -- validaciones: IF ... THEN SIGNAL SQLSTATE '45000' ...; END IF;\n  -- operaciones\nCOMMIT;\n```\n\n- Un `SIGNAL` dentro del bloque también es una SQLEXCEPTION, así que lo atrapa el mismo handler: hace ROLLBACK y RESIGNAL relanza el mensaje original.\n- Sin `RESIGNAL`, el procedimiento terminaría \"bien\" y el error quedaría silenciado.\n- Los `DECLARE` van al principio del BEGIN, en este orden: variables, condiciones/cursores y al final handlers (error 1337 si no).\n- Propiedades ACID: la **atomicidad** (todo o nada) la da el par COMMIT/ROLLBACK.",
+    "hints": [
+      "Validá el cupo primero.",
+      "Leé la capacidad del aula en una variable: si queda NULL, el aula no existe.",
+      "Compará capacidad con cupo."
+    ],
+    "concepts": [
+      "transacción",
+      "EXIT HANDLER",
+      "ROLLBACK",
+      "RESIGNAL",
+      "validaciones"
+    ],
+    "requirements": [
+      {
+        "pattern": "START\\s+TRANSACTION",
+        "message": "La operación tiene que ser una transacción (START TRANSACTION)."
+      },
+      {
+        "pattern": "\\bCOMMIT\\b",
+        "message": "Confirmá la transacción con COMMIT."
+      },
+      {
+        "pattern": "DECLARE\\s+EXIT\\s+HANDLER\\s+FOR\\s+SQLEXCEPTION",
+        "message": "Declará un EXIT HANDLER FOR SQLEXCEPTION."
+      },
+      {
+        "pattern": "\\bROLLBACK\\b",
+        "message": "El handler tiene que hacer ROLLBACK."
+      },
+      {
+        "pattern": "\\bRESIGNAL\\b",
+        "message": "El handler tiene que relanzar el error con RESIGNAL."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Crear con cupo 0",
+          "sql": "CALL sp_crear_comision_tx(3, 5, 3, 2026, 1, 0, 'teorica')",
+          "expect": "error"
+        },
+        {
+          "description": "Crear en un aula inexistente",
+          "sql": "CALL sp_crear_comision_tx(3, 5, 999, 2026, 1, 30, 'teorica')",
+          "expect": "error"
+        },
+        {
+          "description": "Cupo 30 en un aula de capacidad 20",
+          "sql": "CALL sp_crear_comision_tx(3, 5, 7, 2026, 1, 30, 'practica')",
+          "expect": "error"
+        },
+        {
+          "description": "Cupo 45 en un aula de capacidad 50",
+          "sql": "CALL sp_crear_comision_tx(3, 5, 3, 2026, 1, 45, 'teorica')",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": [
+        "SELECT COUNT(*) AS total FROM comisiones",
+        "SELECT id_asignatura, id_docente, id_aula, anio, cuatrimestre, cupo, tipo FROM comisiones ORDER BY id_comision DESC LIMIT 1"
+      ]
+    }
+  },
+  {
+    "id": "u-tp5-05",
+    "title": "Cambiar aula con auditoría",
+    "topic": "transacciones",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP5 Ej. 5",
+    "statement": "Según las indicaciones del TP5: el procedimiento debe ejecutarse como **una única transacción**; ante un error hace **ROLLBACK** y relanza el error con **RESIGNAL**; si todo sale bien, **COMMIT**. Las validaciones fallidas deben producir un error (`SIGNAL`).\n\nCreá la tabla **`auditoria_cambios_aula_comision`** con las columnas: `id_auditoria`, `id_comision`, `id_aula_anterior`, `id_aula_nueva`, `fecha_cambio` (`id_auditoria` INT AUTO_INCREMENT PK; la fecha DATETIME). Se verifican por nombre.\n\nCreá **`sp_cambiar_aula_comision_tx(p_id_comision, p_id_aula_nueva)`** que verifique que la comisión exista, que el aula nueva exista y que su capacidad alcance para el cupo de la comisión. Registrá el cambio en la auditoría y actualizá el aula.",
+    "tables": [
+      "comisiones",
+      "aulas"
+    ],
+    "starterSql": "DELIMITER $$\n\nCREATE PROCEDURE nombre (\n  -- parámetros\n)\nBEGIN\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  -- validaciones y operaciones\n\n  COMMIT;\nEND $$\n\nDELIMITER ;\n",
+    "solution": "CREATE TABLE auditoria_cambios_aula_comision (\n  id_auditoria     INT AUTO_INCREMENT PRIMARY KEY,\n  id_comision      INT,\n  id_aula_anterior INT,\n  id_aula_nueva    INT,\n  fecha_cambio     DATETIME\n);\n\nDELIMITER $$\n\nCREATE PROCEDURE sp_cambiar_aula_comision_tx (\n  IN p_id_comision INT,\n  IN p_id_aula_nueva INT\n)\nBEGIN\n  DECLARE v_aula_anterior INT;\n  DECLARE v_cupo INT;\n  DECLARE v_capacidad INT;\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  SELECT id_aula, cupo INTO v_aula_anterior, v_cupo\n  FROM comisiones WHERE id_comision = p_id_comision FOR UPDATE;\n  IF v_cupo IS NULL THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La comision no existe';\n  END IF;\n\n  SELECT capacidad INTO v_capacidad FROM aulas WHERE id_aula = p_id_aula_nueva;\n  IF v_capacidad IS NULL THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El aula no existe';\n  END IF;\n  IF v_capacidad < v_cupo THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La capacidad del aula no alcanza para el cupo';\n  END IF;\n\n  INSERT INTO auditoria_cambios_aula_comision (id_comision, id_aula_anterior, id_aula_nueva, fecha_cambio)\n  VALUES (p_id_comision, v_aula_anterior, p_id_aula_nueva, NOW());\n\n  UPDATE comisiones SET id_aula = p_id_aula_nueva WHERE id_comision = p_id_comision;\n\n  COMMIT;\nEND $$\n\nDELIMITER ;",
+    "explanation": "Mismo patrón de auditoría que el ejercicio 3: se lee el valor anterior en una variable, se registra y después se actualiza, todo dentro de la misma transacción.\n\n**Esqueleto de todos los ejercicios del TP5:**\n\n```sql\nDECLARE EXIT HANDLER FOR SQLEXCEPTION\nBEGIN\n  ROLLBACK;   -- deshace todo lo hecho desde START TRANSACTION\n  RESIGNAL;   -- relanza el error para que quien llamó se entere\nEND;\n\nSTART TRANSACTION;\n  -- validaciones: IF ... THEN SIGNAL SQLSTATE '45000' ...; END IF;\n  -- operaciones\nCOMMIT;\n```\n\n- Un `SIGNAL` dentro del bloque también es una SQLEXCEPTION, así que lo atrapa el mismo handler: hace ROLLBACK y RESIGNAL relanza el mensaje original.\n- Sin `RESIGNAL`, el procedimiento terminaría \"bien\" y el error quedaría silenciado.\n- Los `DECLARE` van al principio del BEGIN, en este orden: variables, condiciones/cursores y al final handlers (error 1337 si no).\n- Propiedades ACID: la **atomicidad** (todo o nada) la da el par COMMIT/ROLLBACK.",
+    "hints": [
+      "Leé el aula actual y el cupo de la comisión.",
+      "Validá el aula nueva y su capacidad.",
+      "Auditoría y UPDATE."
+    ],
+    "concepts": [
+      "transacción",
+      "EXIT HANDLER",
+      "ROLLBACK",
+      "RESIGNAL",
+      "auditoría"
+    ],
+    "requirements": [
+      {
+        "pattern": "START\\s+TRANSACTION",
+        "message": "La operación tiene que ser una transacción (START TRANSACTION)."
+      },
+      {
+        "pattern": "\\bCOMMIT\\b",
+        "message": "Confirmá la transacción con COMMIT."
+      },
+      {
+        "pattern": "DECLARE\\s+EXIT\\s+HANDLER\\s+FOR\\s+SQLEXCEPTION",
+        "message": "Declará un EXIT HANDLER FOR SQLEXCEPTION."
+      },
+      {
+        "pattern": "\\bROLLBACK\\b",
+        "message": "El handler tiene que hacer ROLLBACK."
+      },
+      {
+        "pattern": "\\bRESIGNAL\\b",
+        "message": "El handler tiene que relanzar el error con RESIGNAL."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Comisión inexistente",
+          "sql": "CALL sp_cambiar_aula_comision_tx(999999, 3)",
+          "expect": "error"
+        },
+        {
+          "description": "Aula inexistente",
+          "sql": "CALL sp_cambiar_aula_comision_tx(1, 999)",
+          "expect": "error"
+        },
+        {
+          "description": "Aula de capacidad 20 para un cupo de 35",
+          "sql": "CALL sp_cambiar_aula_comision_tx(1, 7)",
+          "expect": "error"
+        },
+        {
+          "description": "Pasar la comisión 1 al aula 3",
+          "sql": "CALL sp_cambiar_aula_comision_tx(1, 3)",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": [
+        "SELECT id_comision, id_aula_anterior, id_aula_nueva, DATE(fecha_cambio) = CURDATE() AS hoy FROM auditoria_cambios_aula_comision",
+        "SELECT id_comision, id_aula FROM comisiones WHERE id_comision = 1"
+      ]
+    }
+  },
+  {
+    "id": "u-tp5-06",
+    "title": "Actualizar salario con auditoría",
+    "topic": "transacciones",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP5 Ej. 6",
+    "statement": "Según las indicaciones del TP5: el procedimiento debe ejecutarse como **una única transacción**; ante un error hace **ROLLBACK** y relanza el error con **RESIGNAL**; si todo sale bien, **COMMIT**. Las validaciones fallidas deben producir un error (`SIGNAL`).\n\nCreá la tabla **`auditoria_salarios_docentes`** con las columnas: `id_auditoria`, `id_docente`, `salario_anterior`, `salario_nuevo`, `fecha_cambio` (`id_auditoria` INT AUTO_INCREMENT PK; la fecha DATETIME). Se verifican por nombre.\n\nCreá **`sp_actualizar_salario_docente_tx(p_id_docente, p_salario_nuevo)`** que verifique que el docente exista y que el salario no sea negativo; registre en auditoría el salario anterior, el nuevo y la fecha, y luego actualice el salario.",
+    "tables": [
+      "docentes"
+    ],
+    "starterSql": "DELIMITER $$\n\nCREATE PROCEDURE nombre (\n  -- parámetros\n)\nBEGIN\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  -- validaciones y operaciones\n\n  COMMIT;\nEND $$\n\nDELIMITER ;\n",
+    "solution": "CREATE TABLE auditoria_salarios_docentes (\n  id_auditoria     INT AUTO_INCREMENT PRIMARY KEY,\n  id_docente       INT,\n  salario_anterior DECIMAL(10,2),\n  salario_nuevo    DECIMAL(10,2),\n  fecha_cambio     DATETIME\n);\n\nDELIMITER $$\n\nCREATE PROCEDURE sp_actualizar_salario_docente_tx (\n  IN p_id_docente INT,\n  IN p_salario_nuevo DECIMAL(10,2)\n)\nBEGIN\n  DECLARE v_salario_anterior DECIMAL(10,2);\n  DECLARE v_existe INT;\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  IF p_salario_nuevo < 0 THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El salario no puede ser negativo';\n  END IF;\n\n  SELECT COUNT(*), MAX(salario_base) INTO v_existe, v_salario_anterior\n  FROM docentes WHERE id_docente = p_id_docente;\n  IF v_existe = 0 THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El docente no existe';\n  END IF;\n\n  INSERT INTO auditoria_salarios_docentes (id_docente, salario_anterior, salario_nuevo, fecha_cambio)\n  VALUES (p_id_docente, v_salario_anterior, p_salario_nuevo, NOW());\n\n  UPDATE docentes SET salario_base = p_salario_nuevo WHERE id_docente = p_id_docente;\n\n  COMMIT;\nEND $$\n\nDELIMITER ;",
+    "explanation": "Comparación con el TP4 Ej. 16: allá la auditoría la hacía un **trigger** (se registra cualquier UPDATE, venga de donde venga). Acá la hace el **procedimiento** (solo se registran los cambios hechos con este procedimiento). Esa diferencia es una buena pregunta de oral.\n\nPara validar existencia se usó `COUNT(*)`, que funciona aunque el salario del docente fuera NULL (con `IS NULL` sobre el salario no se podría distinguir \"no existe\" de \"salario nulo\").\n\n**Esqueleto de todos los ejercicios del TP5:**\n\n```sql\nDECLARE EXIT HANDLER FOR SQLEXCEPTION\nBEGIN\n  ROLLBACK;   -- deshace todo lo hecho desde START TRANSACTION\n  RESIGNAL;   -- relanza el error para que quien llamó se entere\nEND;\n\nSTART TRANSACTION;\n  -- validaciones: IF ... THEN SIGNAL SQLSTATE '45000' ...; END IF;\n  -- operaciones\nCOMMIT;\n```\n\n- Un `SIGNAL` dentro del bloque también es una SQLEXCEPTION, así que lo atrapa el mismo handler: hace ROLLBACK y RESIGNAL relanza el mensaje original.\n- Sin `RESIGNAL`, el procedimiento terminaría \"bien\" y el error quedaría silenciado.\n- Los `DECLARE` van al principio del BEGIN, en este orden: variables, condiciones/cursores y al final handlers (error 1337 si no).\n- Propiedades ACID: la **atomicidad** (todo o nada) la da el par COMMIT/ROLLBACK.",
+    "hints": [
+      "Validá que el salario no sea negativo.",
+      "Verificá que el docente exista y guardá su salario actual.",
+      "Auditoría y después UPDATE."
+    ],
+    "concepts": [
+      "transacción",
+      "EXIT HANDLER",
+      "ROLLBACK",
+      "RESIGNAL",
+      "auditoría",
+      "trigger vs procedimiento"
+    ],
+    "requirements": [
+      {
+        "pattern": "START\\s+TRANSACTION",
+        "message": "La operación tiene que ser una transacción (START TRANSACTION)."
+      },
+      {
+        "pattern": "\\bCOMMIT\\b",
+        "message": "Confirmá la transacción con COMMIT."
+      },
+      {
+        "pattern": "DECLARE\\s+EXIT\\s+HANDLER\\s+FOR\\s+SQLEXCEPTION",
+        "message": "Declará un EXIT HANDLER FOR SQLEXCEPTION."
+      },
+      {
+        "pattern": "\\bROLLBACK\\b",
+        "message": "El handler tiene que hacer ROLLBACK."
+      },
+      {
+        "pattern": "\\bRESIGNAL\\b",
+        "message": "El handler tiene que relanzar el error con RESIGNAL."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Docente inexistente",
+          "sql": "CALL sp_actualizar_salario_docente_tx(999999, 100000)",
+          "expect": "error"
+        },
+        {
+          "description": "Salario negativo",
+          "sql": "CALL sp_actualizar_salario_docente_tx(1, -5)",
+          "expect": "error"
+        },
+        {
+          "description": "Salario de 500.000 al docente 1",
+          "sql": "CALL sp_actualizar_salario_docente_tx(1, 500000)",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": [
+        "SELECT id_docente, salario_nuevo, DATE(fecha_cambio) = CURDATE() AS hoy FROM auditoria_salarios_docentes",
+        "SELECT id_docente, salario_base FROM docentes WHERE id_docente = 1"
+      ]
+    }
+  },
+  {
+    "id": "u-tp5-07",
+    "title": "Crear mesa final sin superposición",
+    "topic": "transacciones",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP5 Ej. 7",
+    "statement": "Según las indicaciones del TP5: el procedimiento debe ejecutarse como **una única transacción**; ante un error hace **ROLLBACK** y relanza el error con **RESIGNAL**; si todo sale bien, **COMMIT**. Las validaciones fallidas deben producir un error (`SIGNAL`).\n\nCreá **`sp_crear_mesa_final_tx(p_id_asignatura, p_id_docente, p_id_aula, p_fecha, p_turno, p_llamado)`** que verifique que el aula exista y que **no haya otra mesa en la misma aula, fecha y turno**. Si todo está bien, inserta la mesa.",
+    "tables": [
+      "mesas_finales",
+      "aulas"
+    ],
+    "starterSql": "DELIMITER $$\n\nCREATE PROCEDURE nombre (\n  -- parámetros\n)\nBEGIN\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  -- validaciones y operaciones\n\n  COMMIT;\nEND $$\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE PROCEDURE sp_crear_mesa_final_tx (\n  IN p_id_asignatura INT,\n  IN p_id_docente INT,\n  IN p_id_aula INT,\n  IN p_fecha DATE,\n  IN p_turno VARCHAR(20),\n  IN p_llamado INT\n)\nBEGIN\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  IF NOT EXISTS (SELECT 1 FROM aulas WHERE id_aula = p_id_aula) THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El aula no existe';\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM mesas_finales\n             WHERE id_aula = p_id_aula AND fecha = p_fecha AND turno = p_turno) THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya existe una mesa en esa aula, fecha y turno';\n  END IF;\n\n  INSERT INTO mesas_finales (id_asignatura, id_docente, id_aula, fecha, turno, llamado)\n  VALUES (p_id_asignatura, p_id_docente, p_id_aula, p_fecha, p_turno, p_llamado);\n\n  COMMIT;\nEND $$\n\nDELIMITER ;",
+    "explanation": "La regla \"no dos mesas en la misma aula, fecha y turno\" también podría expresarse de forma declarativa con `UNIQUE (id_aula, fecha, turno)`, que además es segura ante accesos concurrentes. Con la validación en el procedimiento, dos llamadas simultáneas podrían pasar el `EXISTS` a la vez.\n\n**Esqueleto de todos los ejercicios del TP5:**\n\n```sql\nDECLARE EXIT HANDLER FOR SQLEXCEPTION\nBEGIN\n  ROLLBACK;   -- deshace todo lo hecho desde START TRANSACTION\n  RESIGNAL;   -- relanza el error para que quien llamó se entere\nEND;\n\nSTART TRANSACTION;\n  -- validaciones: IF ... THEN SIGNAL SQLSTATE '45000' ...; END IF;\n  -- operaciones\nCOMMIT;\n```\n\n- Un `SIGNAL` dentro del bloque también es una SQLEXCEPTION, así que lo atrapa el mismo handler: hace ROLLBACK y RESIGNAL relanza el mensaje original.\n- Sin `RESIGNAL`, el procedimiento terminaría \"bien\" y el error quedaría silenciado.\n- Los `DECLARE` van al principio del BEGIN, en este orden: variables, condiciones/cursores y al final handlers (error 1337 si no).\n- Propiedades ACID: la **atomicidad** (todo o nada) la da el par COMMIT/ROLLBACK.",
+    "hints": [
+      "Validá el aula con NOT EXISTS.",
+      "Buscá otra mesa con la misma aula, fecha y turno."
+    ],
+    "concepts": [
+      "transacción",
+      "EXIT HANDLER",
+      "ROLLBACK",
+      "RESIGNAL",
+      "EXISTS",
+      "UNIQUE compuesto"
+    ],
+    "requirements": [
+      {
+        "pattern": "START\\s+TRANSACTION",
+        "message": "La operación tiene que ser una transacción (START TRANSACTION)."
+      },
+      {
+        "pattern": "\\bCOMMIT\\b",
+        "message": "Confirmá la transacción con COMMIT."
+      },
+      {
+        "pattern": "DECLARE\\s+EXIT\\s+HANDLER\\s+FOR\\s+SQLEXCEPTION",
+        "message": "Declará un EXIT HANDLER FOR SQLEXCEPTION."
+      },
+      {
+        "pattern": "\\bROLLBACK\\b",
+        "message": "El handler tiene que hacer ROLLBACK."
+      },
+      {
+        "pattern": "\\bRESIGNAL\\b",
+        "message": "El handler tiene que relanzar el error con RESIGNAL."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Aula inexistente",
+          "sql": "CALL sp_crear_mesa_final_tx(1, 1, 999, '2026-12-10', 'Diciembre', 1)",
+          "expect": "error"
+        },
+        {
+          "description": "Superpuesta con la mesa 1 (aula 6, 2025-05-12, Febrero)",
+          "sql": "CALL sp_crear_mesa_final_tx(1, 1, 6, '2025-05-12', 'Febrero', 2)",
+          "expect": "error"
+        },
+        {
+          "description": "Mesa nueva en el aula 6 el 2026-12-10",
+          "sql": "CALL sp_crear_mesa_final_tx(1, 1, 6, '2026-12-10', 'Diciembre', 1)",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": [
+        "SELECT COUNT(*) AS total FROM mesas_finales",
+        "SELECT id_asignatura, id_docente, id_aula, fecha, turno, llamado FROM mesas_finales ORDER BY id_mesa DESC LIMIT 1"
+      ]
+    }
+  },
+  {
+    "id": "u-tp5-08",
+    "title": "Inscribir a mesa final",
+    "topic": "transacciones",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP5 Ej. 8",
+    "statement": "Según las indicaciones del TP5: el procedimiento debe ejecutarse como **una única transacción**; ante un error hace **ROLLBACK** y relanza el error con **RESIGNAL**; si todo sale bien, **COMMIT**. Las validaciones fallidas deben producir un error (`SIGNAL`).\n\nCreá **`sp_inscribir_alumno_final_tx(p_id_mesa, p_id_alumno)`** que verifique que la mesa exista y que el alumno no esté ya inscripto en ella. Si corresponde, inserta la inscripción con fecha actual, estado `'inscripto'` y nota nula.",
+    "tables": [
+      "inscripciones_finales",
+      "mesas_finales"
+    ],
+    "starterSql": "DELIMITER $$\n\nCREATE PROCEDURE nombre (\n  -- parámetros\n)\nBEGIN\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  -- validaciones y operaciones\n\n  COMMIT;\nEND $$\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE PROCEDURE sp_inscribir_alumno_final_tx (\n  IN p_id_mesa INT,\n  IN p_id_alumno INT\n)\nBEGIN\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  IF NOT EXISTS (SELECT 1 FROM mesas_finales WHERE id_mesa = p_id_mesa) THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La mesa no existe';\n  END IF;\n\n  IF EXISTS (SELECT 1 FROM inscripciones_finales\n             WHERE id_mesa = p_id_mesa AND id_alumno = p_id_alumno) THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El alumno ya esta inscripto en la mesa';\n  END IF;\n\n  INSERT INTO inscripciones_finales (id_mesa, id_alumno, fecha_inscripcion, estado, nota)\n  VALUES (p_id_mesa, p_id_alumno, CURDATE(), 'inscripto', NULL);\n\n  COMMIT;\nEND $$\n\nDELIMITER ;",
+    "explanation": "Es el caso más simple del TP: dos validaciones con `EXISTS` y un INSERT. Aunque tenga una sola escritura, la transacción con handler sigue siendo útil para que cualquier error se informe con RESIGNAL de forma uniforme.\n\n**Esqueleto de todos los ejercicios del TP5:**\n\n```sql\nDECLARE EXIT HANDLER FOR SQLEXCEPTION\nBEGIN\n  ROLLBACK;   -- deshace todo lo hecho desde START TRANSACTION\n  RESIGNAL;   -- relanza el error para que quien llamó se entere\nEND;\n\nSTART TRANSACTION;\n  -- validaciones: IF ... THEN SIGNAL SQLSTATE '45000' ...; END IF;\n  -- operaciones\nCOMMIT;\n```\n\n- Un `SIGNAL` dentro del bloque también es una SQLEXCEPTION, así que lo atrapa el mismo handler: hace ROLLBACK y RESIGNAL relanza el mensaje original.\n- Sin `RESIGNAL`, el procedimiento terminaría \"bien\" y el error quedaría silenciado.\n- Los `DECLARE` van al principio del BEGIN, en este orden: variables, condiciones/cursores y al final handlers (error 1337 si no).\n- Propiedades ACID: la **atomicidad** (todo o nada) la da el par COMMIT/ROLLBACK.",
+    "hints": [
+      "Dos validaciones con EXISTS / NOT EXISTS.",
+      "Insertá con CURDATE(), 'inscripto' y NULL."
+    ],
+    "concepts": [
+      "transacción",
+      "EXIT HANDLER",
+      "ROLLBACK",
+      "RESIGNAL",
+      "EXISTS"
+    ],
+    "requirements": [
+      {
+        "pattern": "START\\s+TRANSACTION",
+        "message": "La operación tiene que ser una transacción (START TRANSACTION)."
+      },
+      {
+        "pattern": "\\bCOMMIT\\b",
+        "message": "Confirmá la transacción con COMMIT."
+      },
+      {
+        "pattern": "DECLARE\\s+EXIT\\s+HANDLER\\s+FOR\\s+SQLEXCEPTION",
+        "message": "Declará un EXIT HANDLER FOR SQLEXCEPTION."
+      },
+      {
+        "pattern": "\\bROLLBACK\\b",
+        "message": "El handler tiene que hacer ROLLBACK."
+      },
+      {
+        "pattern": "\\bRESIGNAL\\b",
+        "message": "El handler tiene que relanzar el error con RESIGNAL."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Mesa inexistente",
+          "sql": "CALL sp_inscribir_alumno_final_tx(999999, 1)",
+          "expect": "error"
+        },
+        {
+          "description": "Alumno ya inscripto (mesa 1162, alumno 131)",
+          "sql": "CALL sp_inscribir_alumno_final_tx(1162, 131)",
+          "expect": "error"
+        },
+        {
+          "description": "Inscribir al alumno 1 en la mesa 402",
+          "sql": "CALL sp_inscribir_alumno_final_tx(402, 1)",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": [
+        "SELECT id_mesa, id_alumno, fecha_inscripcion = CURDATE() AS hoy, estado, nota FROM inscripciones_finales WHERE id_alumno = 1 AND id_mesa IN (402, 999999)",
+        "SELECT COUNT(*) AS total FROM inscripciones_finales"
+      ]
+    }
+  },
+  {
+    "id": "u-tp5-09",
+    "title": "Registrar resultado de final",
+    "topic": "transacciones",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP5 Ej. 9",
+    "statement": "Según las indicaciones del TP5: el procedimiento debe ejecutarse como **una única transacción**; ante un error hace **ROLLBACK** y relanza el error con **RESIGNAL**; si todo sale bien, **COMMIT**. Las validaciones fallidas deben producir un error (`SIGNAL`).\n\nCreá **`sp_registrar_resultado_final_tx(p_id_inscripcion_final, p_nota)`** que verifique que la inscripción exista y que la nota esté entre 0 y 10. Actualizá la nota y el estado: `'aprobado'` si la nota es ≥ 4, `'desaprobado'` si es menor.",
+    "tables": [
+      "inscripciones_finales"
+    ],
+    "starterSql": "DELIMITER $$\n\nCREATE PROCEDURE nombre (\n  -- parámetros\n)\nBEGIN\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  -- validaciones y operaciones\n\n  COMMIT;\nEND $$\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE PROCEDURE sp_registrar_resultado_final_tx (\n  IN p_id_inscripcion_final INT,\n  IN p_nota DECIMAL(4,2)\n)\nBEGIN\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  IF NOT EXISTS (SELECT 1 FROM inscripciones_finales\n                 WHERE id_inscripcion_final = p_id_inscripcion_final) THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La inscripcion no existe';\n  END IF;\n\n  IF p_nota < 0 OR p_nota > 10 THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La nota debe estar entre 0 y 10';\n  END IF;\n\n  UPDATE inscripciones_finales\n  SET nota = p_nota,\n      estado = CASE WHEN p_nota >= 4 THEN 'aprobado' ELSE 'desaprobado' END\n  WHERE id_inscripcion_final = p_id_inscripcion_final;\n\n  COMMIT;\nEND $$\n\nDELIMITER ;",
+    "explanation": "Un único UPDATE cambia las dos columnas a la vez; `CASE WHEN` elige el estado según la nota. Si la inscripción no existiera, un UPDATE sin validación simplemente afectaría 0 filas **sin error**: por eso hace falta validar explícitamente.\n\n**Esqueleto de todos los ejercicios del TP5:**\n\n```sql\nDECLARE EXIT HANDLER FOR SQLEXCEPTION\nBEGIN\n  ROLLBACK;   -- deshace todo lo hecho desde START TRANSACTION\n  RESIGNAL;   -- relanza el error para que quien llamó se entere\nEND;\n\nSTART TRANSACTION;\n  -- validaciones: IF ... THEN SIGNAL SQLSTATE '45000' ...; END IF;\n  -- operaciones\nCOMMIT;\n```\n\n- Un `SIGNAL` dentro del bloque también es una SQLEXCEPTION, así que lo atrapa el mismo handler: hace ROLLBACK y RESIGNAL relanza el mensaje original.\n- Sin `RESIGNAL`, el procedimiento terminaría \"bien\" y el error quedaría silenciado.\n- Los `DECLARE` van al principio del BEGIN, en este orden: variables, condiciones/cursores y al final handlers (error 1337 si no).\n- Propiedades ACID: la **atomicidad** (todo o nada) la da el par COMMIT/ROLLBACK.",
+    "hints": [
+      "Un UPDATE sin filas que coincidan no da error: validá la existencia antes.",
+      "CASE WHEN nota >= 4 THEN ... ELSE ... END."
+    ],
+    "concepts": [
+      "transacción",
+      "EXIT HANDLER",
+      "ROLLBACK",
+      "RESIGNAL",
+      "CASE",
+      "UPDATE"
+    ],
+    "requirements": [
+      {
+        "pattern": "START\\s+TRANSACTION",
+        "message": "La operación tiene que ser una transacción (START TRANSACTION)."
+      },
+      {
+        "pattern": "\\bCOMMIT\\b",
+        "message": "Confirmá la transacción con COMMIT."
+      },
+      {
+        "pattern": "DECLARE\\s+EXIT\\s+HANDLER\\s+FOR\\s+SQLEXCEPTION",
+        "message": "Declará un EXIT HANDLER FOR SQLEXCEPTION."
+      },
+      {
+        "pattern": "\\bROLLBACK\\b",
+        "message": "El handler tiene que hacer ROLLBACK."
+      },
+      {
+        "pattern": "\\bRESIGNAL\\b",
+        "message": "El handler tiene que relanzar el error con RESIGNAL."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Inscripción inexistente",
+          "sql": "CALL sp_registrar_resultado_final_tx(999999, 5)",
+          "expect": "error"
+        },
+        {
+          "description": "Nota 11",
+          "sql": "CALL sp_registrar_resultado_final_tx(2, 11)",
+          "expect": "error"
+        },
+        {
+          "description": "Un 8 en la inscripción 2",
+          "sql": "CALL sp_registrar_resultado_final_tx(2, 8)",
+          "expect": "ok"
+        },
+        {
+          "description": "Un 3 en la inscripción 1",
+          "sql": "CALL sp_registrar_resultado_final_tx(1, 3)",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": [
+        "SELECT id_inscripcion_final, nota, estado FROM inscripciones_finales WHERE id_inscripcion_final IN (1, 2)"
+      ]
+    }
+  },
+  {
+    "id": "u-tp5-10",
+    "title": "Reasignar docente con auditoría",
+    "topic": "transacciones",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP5 Ej. 10",
+    "statement": "Según las indicaciones del TP5: el procedimiento debe ejecutarse como **una única transacción**; ante un error hace **ROLLBACK** y relanza el error con **RESIGNAL**; si todo sale bien, **COMMIT**. Las validaciones fallidas deben producir un error (`SIGNAL`).\n\nCreá la tabla **`auditoria_cambios_docente_comision`** con las columnas: `id_auditoria`, `id_comision`, `id_docente_anterior`, `id_docente_nuevo`, `fecha_cambio` (`id_auditoria` INT AUTO_INCREMENT PK; la fecha DATETIME). Se verifican por nombre.\n\nCreá **`sp_reasignar_docente_comision_tx(p_id_comision, p_id_docente_nuevo)`** que verifique que la comisión y el docente nuevo existan, registre en auditoría el docente anterior, el nuevo y la fecha, y actualice la comisión.",
+    "tables": [
+      "comisiones",
+      "docentes"
+    ],
+    "starterSql": "DELIMITER $$\n\nCREATE PROCEDURE nombre (\n  -- parámetros\n)\nBEGIN\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  -- validaciones y operaciones\n\n  COMMIT;\nEND $$\n\nDELIMITER ;\n",
+    "solution": "CREATE TABLE auditoria_cambios_docente_comision (\n  id_auditoria        INT AUTO_INCREMENT PRIMARY KEY,\n  id_comision         INT,\n  id_docente_anterior INT,\n  id_docente_nuevo    INT,\n  fecha_cambio        DATETIME\n);\n\nDELIMITER $$\n\nCREATE PROCEDURE sp_reasignar_docente_comision_tx (\n  IN p_id_comision INT,\n  IN p_id_docente_nuevo INT\n)\nBEGIN\n  DECLARE v_docente_anterior INT;\n  DECLARE EXIT HANDLER FOR SQLEXCEPTION\n  BEGIN\n    ROLLBACK;\n    RESIGNAL;\n  END;\n\n  START TRANSACTION;\n\n  SELECT id_docente INTO v_docente_anterior\n  FROM comisiones WHERE id_comision = p_id_comision FOR UPDATE;\n  IF v_docente_anterior IS NULL THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La comision no existe';\n  END IF;\n\n  IF NOT EXISTS (SELECT 1 FROM docentes WHERE id_docente = p_id_docente_nuevo) THEN\n    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El docente no existe';\n  END IF;\n\n  INSERT INTO auditoria_cambios_docente_comision (id_comision, id_docente_anterior, id_docente_nuevo, fecha_cambio)\n  VALUES (p_id_comision, v_docente_anterior, p_id_docente_nuevo, NOW());\n\n  UPDATE comisiones SET id_docente = p_id_docente_nuevo WHERE id_comision = p_id_comision;\n\n  COMMIT;\nEND $$\n\nDELIMITER ;",
+    "explanation": "Cierra el TP con el patrón completo: leer el estado anterior, validar, auditar y modificar, todo como una unidad atómica.\n\n**Esqueleto de todos los ejercicios del TP5:**\n\n```sql\nDECLARE EXIT HANDLER FOR SQLEXCEPTION\nBEGIN\n  ROLLBACK;   -- deshace todo lo hecho desde START TRANSACTION\n  RESIGNAL;   -- relanza el error para que quien llamó se entere\nEND;\n\nSTART TRANSACTION;\n  -- validaciones: IF ... THEN SIGNAL SQLSTATE '45000' ...; END IF;\n  -- operaciones\nCOMMIT;\n```\n\n- Un `SIGNAL` dentro del bloque también es una SQLEXCEPTION, así que lo atrapa el mismo handler: hace ROLLBACK y RESIGNAL relanza el mensaje original.\n- Sin `RESIGNAL`, el procedimiento terminaría \"bien\" y el error quedaría silenciado.\n- Los `DECLARE` van al principio del BEGIN, en este orden: variables, condiciones/cursores y al final handlers (error 1337 si no).\n- Propiedades ACID: la **atomicidad** (todo o nada) la da el par COMMIT/ROLLBACK.",
+    "hints": [
+      "Leé el docente actual de la comisión.",
+      "Validá que el docente nuevo exista.",
+      "Auditoría y UPDATE."
+    ],
+    "concepts": [
+      "transacción",
+      "EXIT HANDLER",
+      "ROLLBACK",
+      "RESIGNAL",
+      "auditoría"
+    ],
+    "requirements": [
+      {
+        "pattern": "START\\s+TRANSACTION",
+        "message": "La operación tiene que ser una transacción (START TRANSACTION)."
+      },
+      {
+        "pattern": "\\bCOMMIT\\b",
+        "message": "Confirmá la transacción con COMMIT."
+      },
+      {
+        "pattern": "DECLARE\\s+EXIT\\s+HANDLER\\s+FOR\\s+SQLEXCEPTION",
+        "message": "Declará un EXIT HANDLER FOR SQLEXCEPTION."
+      },
+      {
+        "pattern": "\\bROLLBACK\\b",
+        "message": "El handler tiene que hacer ROLLBACK."
+      },
+      {
+        "pattern": "\\bRESIGNAL\\b",
+        "message": "El handler tiene que relanzar el error con RESIGNAL."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Comisión inexistente",
+          "sql": "CALL sp_reasignar_docente_comision_tx(999999, 1)",
+          "expect": "error"
+        },
+        {
+          "description": "Docente inexistente",
+          "sql": "CALL sp_reasignar_docente_comision_tx(1, 999999)",
+          "expect": "error"
+        },
+        {
+          "description": "Asignar el docente 2 a la comisión 1",
+          "sql": "CALL sp_reasignar_docente_comision_tx(1, 2)",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": [
+        "SELECT id_comision, id_docente_anterior, id_docente_nuevo, DATE(fecha_cambio) = CURDATE() AS hoy FROM auditoria_cambios_docente_comision",
+        "SELECT id_comision, id_docente FROM comisiones WHERE id_comision = 1"
+      ]
+    }
+  }
+]

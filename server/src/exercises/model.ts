@@ -9,13 +9,14 @@ export const TOPICS = {
   'agregacion': 'Agregación y GROUP BY',
   'left-join': 'LEFT JOIN',
   'subconsultas': 'Subconsultas',
+  'integradores': 'Integradores',
+  'correccion': 'Detección y corrección de errores',
   'dml': 'INSERT, UPDATE y DELETE',
   'restricciones': 'Restricciones de integridad',
   'triggers': 'Triggers',
   'procedimientos': 'Procedimientos y funciones',
   'transacciones': 'Transacciones',
   'vistas': 'Vistas',
-  'integradores': 'Integradores',
 } as const;
 export type Topic = keyof typeof TOPICS;
 

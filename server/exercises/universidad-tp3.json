@@ -1,0 +1,1485 @@
+[
+  {
+    "id": "u-tp3-03",
+    "title": "Optativas cortas",
+    "topic": "consultas-basicas",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 3",
+    "statement": "Obtener las asignaturas **no obligatorias** que tengan **menos de 70 horas** de carga horaria. Mostrar **nombre, créditos, carga horaria** y la columna **es_obligatoria** (para indicar si es obligatoria).",
+    "tables": [
+      "asignaturas"
+    ],
+    "solution": "SELECT nombre, creditos, carga_horaria, es_obligatoria\nFROM asignaturas\nWHERE es_obligatoria = 0\n  AND carga_horaria < 70;",
+    "explanation": "`es_obligatoria` es un `TINYINT(1)` que funciona como booleano: 0 = no, 1 = sí. Las dos condiciones se combinan con `AND`. El enunciado pide *indicar si es obligatoria*, por eso se muestra la columna aunque en este resultado siempre valga 0.",
+    "hints": [
+      "Las no obligatorias tienen es_obligatoria = 0.",
+      "Combiná las dos condiciones con AND."
+    ],
+    "concepts": [
+      "WHERE",
+      "AND",
+      "booleanos en MySQL"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-05",
+    "title": "Laboratorios y centros de cómputos",
+    "topic": "consultas-basicas",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 5",
+    "statement": "Mostrar las aulas de tipo **laboratorio** o **centro de cómputos**. Mostrar **nombre, tipo y capacidad**. Ordenar por capacidad de **mayor a menor**.",
+    "tables": [
+      "aulas"
+    ],
+    "solution": "SELECT nombre, tipo, capacidad\nFROM aulas\nWHERE tipo IN ('laboratorio', 'centro de computos')\nORDER BY capacidad DESC;",
+    "explanation": "`IN ('laboratorio', 'centro de computos')` es equivalente a `tipo = 'laboratorio' OR tipo = 'centro de computos'`, pero más legible. Ojo con el valor del ENUM: está escrito **sin tilde** (`centro de computos`).\n\n\"De mayor a menor\" es `DESC`. Un error común (que aparece en resoluciones del TP) es dejar `ASC`.",
+    "hints": [
+      "Mirá los valores exactos del ENUM tipo en el esquema.",
+      "Podés usar IN (...) con los dos valores.",
+      "Mayor a menor = DESC."
+    ],
+    "concepts": [
+      "IN",
+      "ORDER BY DESC",
+      "ENUM"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": true,
+      "orderKeys": [
+        2
+      ]
+    }
+  },
+  {
+    "id": "u-tp3-08",
+    "title": "Inscriptos que cursan o aprobaron",
+    "topic": "joins",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 8",
+    "statement": "Obtener los alumnos inscriptos en comisiones cuyo estado sea **Cursa** o **Aprobada**. Mostrar **nombre y apellido del alumno, id de la comisión, fecha de inscripción y estado**.",
+    "tables": [
+      "inscripcion_alumno_comision",
+      "alumnos"
+    ],
+    "solution": "SELECT a.nombre, a.apellido, i.id_comision, i.fecha_inscripcion, i.estado\nFROM inscripcion_alumno_comision i\nJOIN alumnos a ON a.id_alumno = i.id_alumno\nWHERE i.estado IN ('Cursa', 'Aprobada');",
+    "explanation": "La inscripción vive en `inscripcion_alumno_comision`; el nombre del alumno, en `alumnos`. Un `JOIN` por `id_alumno` une ambas. El filtro va sobre el estado de la **inscripción** (ENUM con mayúscula inicial: `'Cursa'`, `'Aprobada'`).",
+    "hints": [
+      "El estado está en la tabla de inscripciones, no en alumnos.",
+      "Uní con alumnos para obtener nombre y apellido."
+    ],
+    "concepts": [
+      "INNER JOIN",
+      "IN"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-10",
+    "title": "Promedio por tipo de examen",
+    "topic": "agregacion",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 10",
+    "statement": "Calcular el promedio de notas por **tipo de examen**. Mostrar el **tipo**, la **cantidad de notas registradas** y el **promedio redondeado a dos decimales**. Incluir solo los tipos con **más de 100 notas** registradas.",
+    "tables": [
+      "examenes",
+      "notas"
+    ],
+    "solution": "SELECT e.tipo,\n       COUNT(n.id_nota)      AS cantidad_notas,\n       ROUND(AVG(n.nota), 2) AS promedio\nFROM examenes e\nJOIN notas n ON n.id_examen = e.id_examen\nGROUP BY e.tipo\nHAVING COUNT(n.id_nota) > 100;",
+    "explanation": "Se agrupa por `e.tipo` y se calculan `COUNT` y `AVG`. La condición \"más de 100 notas\" es sobre un valor **agregado**, así que va en `HAVING`, no en `WHERE` (en WHERE daría error 1111).\n\n`ROUND(AVG(n.nota), 2)` redondea a dos decimales.",
+    "hints": [
+      "El tipo de examen está en examenes; las notas, en notas.",
+      "Las condiciones sobre COUNT() van en HAVING.",
+      "ROUND(valor, 2) redondea a dos decimales."
+    ],
+    "concepts": [
+      "GROUP BY",
+      "HAVING",
+      "AVG()",
+      "ROUND()"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-11",
+    "title": "Alumnos por carrera y estado",
+    "topic": "agregacion",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 11",
+    "statement": "Calcular la cantidad de alumnos inscriptos por **carrera** y **estado de inscripción**. Mostrar **nombre de la carrera, estado y cantidad de alumnos**. Incluir solo los grupos con **más de 20 alumnos**.",
+    "tables": [
+      "alumno_carrera",
+      "carreras"
+    ],
+    "solution": "SELECT c.nombre AS carrera, ac.estado, COUNT(*) AS cantidad_alumnos\nFROM alumno_carrera ac\nJOIN carreras c ON c.id_carrera = ac.id_carrera\nGROUP BY c.id_carrera, c.nombre, ac.estado\nHAVING COUNT(*) > 20;",
+    "explanation": "Se agrupa por dos criterios: carrera y estado. Conviene agrupar por `c.id_carrera` además de `c.nombre`: si dos carreras se llamaran igual, agrupar solo por nombre las mezclaría.",
+    "hints": [
+      "Agrupá por carrera y por estado a la vez.",
+      "El filtro sobre la cantidad va en HAVING."
+    ],
+    "concepts": [
+      "GROUP BY múltiple",
+      "HAVING"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-12",
+    "title": "Obligatorias por departamento",
+    "topic": "agregacion",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 12",
+    "statement": "Obtener la cantidad de asignaturas **obligatorias** por departamento y su **carga horaria promedio**. Mostrar **nombre del departamento, cantidad de obligatorias y carga horaria promedio**. Incluir solo departamentos con **al menos 10** obligatorias y promedio **mayor a 60 horas**.",
+    "tables": [
+      "asignaturas",
+      "departamentos"
+    ],
+    "solution": "SELECT d.nombre AS departamento,\n       COUNT(*)              AS cantidad_obligatorias,\n       AVG(a.carga_horaria)  AS carga_horaria_promedio\nFROM asignaturas a\nJOIN departamentos d ON d.id_departamento = a.id_departamento\nWHERE a.es_obligatoria = 1\nGROUP BY d.id_departamento, d.nombre\nHAVING COUNT(*) >= 10\n   AND AVG(a.carga_horaria) > 60;",
+    "explanation": "Hay dos tipos de filtros:\n\n- `WHERE a.es_obligatoria = 1` filtra **filas** antes de agrupar (solo se cuentan obligatorias).\n- `HAVING COUNT(*) >= 10 AND AVG(...) > 60` filtra **grupos** después de agrupar.\n\n\"Al menos 10\" es `>= 10`.",
+    "hints": [
+      "Primero filtrá las filas obligatorias (WHERE), después agrupá.",
+      "Las dos condiciones sobre agregados van juntas en HAVING."
+    ],
+    "concepts": [
+      "WHERE vs HAVING",
+      "AVG()",
+      "COUNT()"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-13",
+    "title": "Docentes con muchas comisiones en 2025",
+    "topic": "agregacion",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 13",
+    "statement": "Calcular la cantidad de comisiones asignadas a cada docente durante **2025**. Mostrar **nombre, apellido, cantidad de comisiones y cupo total** (suma de los cupos). Incluir solo docentes con **más de 3 comisiones** y cupo total **superior a 120**.",
+    "tables": [
+      "docentes",
+      "comisiones"
+    ],
+    "solution": "SELECT d.nombre, d.apellido,\n       COUNT(c.id_comision) AS cantidad_comisiones,\n       SUM(c.cupo)          AS cupo_total\nFROM docentes d\nJOIN comisiones c ON c.id_docente = d.id_docente\nWHERE c.anio = 2025\nGROUP BY d.id_docente, d.nombre, d.apellido\nHAVING COUNT(c.id_comision) > 3\n   AND SUM(c.cupo) > 120;",
+    "explanation": "`SUM(c.cupo)` suma los cupos de las comisiones de cada grupo. El año va en `WHERE` (filtra comisiones) y las condiciones sobre `COUNT` y `SUM` en `HAVING`.",
+    "hints": [
+      "El año 2025 filtra comisiones: va en WHERE.",
+      "SUM(c.cupo) da el cupo total."
+    ],
+    "concepts": [
+      "SUM()",
+      "HAVING"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-14",
+    "title": "Rendimiento por asignatura",
+    "topic": "agregacion",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 14",
+    "statement": "Calcular el rendimiento por asignatura según las notas de sus exámenes. Mostrar **nombre de la asignatura, cantidad de notas, nota mínima, nota máxima y promedio**. Incluir solo asignaturas con **más de 50 notas** y promedio **menor a 6**. Ordenar por promedio de **mayor a menor**.",
+    "tables": [
+      "asignaturas",
+      "comisiones",
+      "examenes",
+      "notas"
+    ],
+    "solution": "SELECT a.nombre AS asignatura,\n       COUNT(n.id_nota) AS cantidad_notas,\n       MIN(n.nota)      AS nota_minima,\n       MAX(n.nota)      AS nota_maxima,\n       AVG(n.nota)      AS promedio\nFROM asignaturas a\nJOIN comisiones c ON c.id_asignatura = a.id_asignatura\nJOIN examenes e   ON e.id_comision   = c.id_comision\nJOIN notas n      ON n.id_examen     = e.id_examen\nGROUP BY a.id_asignatura, a.nombre\nHAVING COUNT(n.id_nota) > 50\n   AND AVG(n.nota) < 6\nORDER BY promedio DESC;",
+    "explanation": "Las notas no se relacionan directamente con la asignatura: el camino es `asignaturas → comisiones → examenes → notas`. Hacen falta tres JOIN.\n\nEste camino es el error más común de la sección 7 (ejercicio 49): `examenes` no tiene `id_asignatura`.",
+    "hints": [
+      "¿Cómo llega una nota a su asignatura? Seguí las FK: notas → examenes → comisiones → asignaturas.",
+      "MIN, MAX y AVG se calculan en la misma consulta.",
+      "ORDER BY promedio DESC."
+    ],
+    "concepts": [
+      "JOIN en cadena",
+      "MIN/MAX/AVG",
+      "HAVING"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": true,
+      "orderKeys": [
+        4
+      ]
+    }
+  },
+  {
+    "id": "u-tp3-15",
+    "title": "Comisiones 2025 con más de 25 inscriptos",
+    "topic": "agregacion",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 15",
+    "statement": "Calcular la cantidad de alumnos inscriptos en cada comisión de **2025**. Mostrar **id de comisión, nombre de la asignatura, año, cuatrimestre, cupo y cantidad de inscriptos**. Incluir solo comisiones con **más de 25 inscriptos**, ordenadas por cantidad de inscriptos de **mayor a menor**.",
+    "tables": [
+      "comisiones",
+      "asignaturas",
+      "inscripcion_alumno_comision"
+    ],
+    "solution": "SELECT c.id_comision, a.nombre AS asignatura, c.anio, c.cuatrimestre, c.cupo,\n       COUNT(i.id_inscripcion) AS cantidad_inscriptos\nFROM comisiones c\nJOIN asignaturas a ON a.id_asignatura = c.id_asignatura\nJOIN inscripcion_alumno_comision i ON i.id_comision = c.id_comision\nWHERE c.anio = 2025\nGROUP BY c.id_comision, a.nombre, c.anio, c.cuatrimestre, c.cupo\nHAVING COUNT(i.id_inscripcion) > 25\nORDER BY cantidad_inscriptos DESC;",
+    "explanation": "Se cuenta `COUNT(i.id_inscripcion)` agrupando por comisión. Todas las columnas no agregadas del SELECT tienen que estar en el `GROUP BY` (o depender funcionalmente de la PK agrupada).",
+    "hints": [
+      "Agrupá por comisión y contá las inscripciones.",
+      "El filtro > 25 va en HAVING y el orden por la cantidad DESC."
+    ],
+    "concepts": [
+      "GROUP BY",
+      "HAVING",
+      "ORDER BY"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": true,
+      "orderKeys": [
+        5
+      ]
+    }
+  },
+  {
+    "id": "u-tp3-17",
+    "title": "Carreras con baja demanda",
+    "topic": "left-join",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 17",
+    "statement": "Identificar las carreras con **menos de 70 alumnos con inscripción activa**, **incluyendo** las que no tienen ningún alumno activo. Mostrar **id, nombre, nivel, modalidad** de la carrera y la **cantidad de alumnos activos**.",
+    "tables": [
+      "carreras",
+      "alumno_carrera"
+    ],
+    "solution": "SELECT c.id_carrera, c.nombre, c.nivel, c.modalidad,\n       COUNT(ac.id_alumno) AS alumnos_activos\nFROM carreras c\nLEFT JOIN alumno_carrera ac\n       ON ac.id_carrera = c.id_carrera\n      AND ac.estado = 'activa'\nGROUP BY c.id_carrera, c.nombre, c.nivel, c.modalidad\nHAVING COUNT(ac.id_alumno) < 70;",
+    "explanation": "La clave de este ejercicio es **dónde va la condición `estado = 'activa'`**:\n\n- En el `ON` del LEFT JOIN: las carreras sin activos se conservan con NULL y `COUNT(ac.id_alumno)` da 0. ✔\n- En el `WHERE`: elimina las filas con NULL y las carreras sin activos **desaparecen**, convirtiendo el LEFT JOIN en un INNER JOIN. ✘\n\nAdemás, hay que contar una columna de la tabla derecha (`COUNT(ac.id_alumno)`), no `COUNT(*)`, porque `COUNT(*)` contaría 1 para una carrera sin alumnos.",
+    "hints": [
+      "Usá LEFT JOIN para que aparezcan carreras sin alumnos activos.",
+      "¿Qué pasa si ponés estado = 'activa' en el WHERE en vez del ON?",
+      "COUNT(*) vs COUNT(columna): ¿cuál da 0 cuando no hay coincidencias?"
+    ],
+    "concepts": [
+      "LEFT JOIN",
+      "condición en ON vs WHERE",
+      "COUNT(columna)"
+    ],
+    "requirements": [
+      {
+        "pattern": "LEFT\\s+(OUTER\\s+)?JOIN",
+        "message": "Resolvelo con LEFT JOIN para incluir carreras sin alumnos activos."
+      }
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-18",
+    "title": "Aulas con poco uso en 2025",
+    "topic": "left-join",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 18",
+    "statement": "Identificar las aulas **sin comisiones en 2025** o con **menos de 3 comisiones** ese año. Mostrar **id, nombre, tipo, capacidad** y la **cantidad de comisiones de 2025**.\n\n> En estos datos el resultado correcto es **vacío**: todas las aulas tienen 3 o más comisiones en 2025. Igual se corrige que uses LEFT JOIN y que la condición del año esté en el lugar correcto.",
+    "tables": [
+      "aulas",
+      "comisiones"
+    ],
+    "solution": "SELECT au.id_aula, au.nombre, au.tipo, au.capacidad,\n       COUNT(c.id_comision) AS comisiones_2025\nFROM aulas au\nLEFT JOIN comisiones c\n       ON c.id_aula = au.id_aula\n      AND c.anio = 2025\nGROUP BY au.id_aula, au.nombre, au.tipo, au.capacidad\nHAVING COUNT(c.id_comision) < 3;",
+    "explanation": "Mismo patrón que el ejercicio 17: el año va en el `ON` para que un aula sin comisiones 2025 se conserve con conteo 0. Si se pone `WHERE c.anio = 2025`, las aulas sin uso ese año se pierden (el error del ejercicio 55).\n\nUna consulta de control que devuelve 0 filas también es información: significa que no hay aulas subutilizadas.",
+    "hints": [
+      "LEFT JOIN desde aulas hacia comisiones.",
+      "La condición del año va en el ON, no en el WHERE.",
+      "HAVING COUNT(c.id_comision) < 3."
+    ],
+    "concepts": [
+      "LEFT JOIN",
+      "condición en ON",
+      "HAVING"
+    ],
+    "requirements": [
+      {
+        "pattern": "LEFT\\s+(OUTER\\s+)?JOIN",
+        "message": "Usá LEFT JOIN para incluir aulas sin comisiones."
+      },
+      {
+        "pattern": "\\bHAVING\\b",
+        "message": "Filtrá la cantidad con HAVING."
+      }
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-19",
+    "title": "Docentes sin comisiones en 2025",
+    "topic": "left-join",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 19",
+    "statement": "Detectar docentes que **no tienen ninguna comisión asignada en 2025**. Mostrar **id, nombre, apellido** y el **nombre del departamento** al que pertenecen.",
+    "tables": [
+      "docentes",
+      "departamentos",
+      "comisiones"
+    ],
+    "solution": "SELECT d.id_docente, d.nombre, d.apellido, dep.nombre AS departamento\nFROM docentes d\nLEFT JOIN departamentos dep ON dep.id_departamento = d.id_departamento\nLEFT JOIN comisiones c\n       ON c.id_docente = d.id_docente\n      AND c.anio = 2025\nWHERE c.id_comision IS NULL;",
+    "explanation": "Anti-join con condición: `LEFT JOIN comisiones c ON c.id_docente = d.id_docente AND c.anio = 2025` y luego `WHERE c.id_comision IS NULL`. Si el año estuviera en el WHERE, `c.anio` sería NULL para los docentes sin comisión y la condición nunca se cumpliría.\n\nEquivalente con subconsulta: `WHERE d.id_docente NOT IN (SELECT id_docente FROM comisiones WHERE anio = 2025)` (es el ejercicio 24).",
+    "hints": [
+      "Necesitás docentes SIN coincidencia: LEFT JOIN + IS NULL.",
+      "El filtro del año tiene que ir dentro del ON."
+    ],
+    "concepts": [
+      "anti-join",
+      "LEFT JOIN",
+      "IS NULL"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-20",
+    "title": "Obligatorias con docente pero sin comisión 2025",
+    "topic": "left-join",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 20",
+    "statement": "Controlar asignaturas **obligatorias** que tienen **al menos un docente asociado** (tabla `docente_asignatura`) pero **ninguna comisión abierta en 2025**. Mostrar **id y nombre de la asignatura, carga horaria, id, nombre y apellido del docente**: una fila por cada combinación asignatura-docente.",
+    "tables": [
+      "asignaturas",
+      "docente_asignatura",
+      "docentes",
+      "comisiones"
+    ],
+    "solution": "SELECT a.id_asignatura, a.nombre AS asignatura, a.carga_horaria,\n       d.id_docente, d.nombre, d.apellido\nFROM asignaturas a\nJOIN docente_asignatura da ON da.id_asignatura = a.id_asignatura\nJOIN docentes d            ON d.id_docente     = da.id_docente\nLEFT JOIN comisiones c\n       ON c.id_asignatura = a.id_asignatura\n      AND c.anio = 2025\nWHERE a.es_obligatoria = 1\n  AND c.id_comision IS NULL;",
+    "explanation": "Se combinan los dos tipos de JOIN:\n\n- `INNER JOIN docente_asignatura` y `docentes`: exige que haya docente asociado y genera una fila por docente.\n- `LEFT JOIN comisiones ... AND c.anio = 2025` + `WHERE c.id_comision IS NULL`: se queda con las que no tienen comisión ese año.\n\nSi una asignatura tiene el mismo docente cargado en varios años en `docente_asignatura`, aparece varias veces: es una fila por cada asociación registrada.",
+    "hints": [
+      "Para exigir docente asociado: INNER JOIN con docente_asignatura.",
+      "Para detectar la falta de comisión 2025: LEFT JOIN + IS NULL.",
+      "No olvides es_obligatoria = 1."
+    ],
+    "concepts": [
+      "INNER y LEFT JOIN combinados",
+      "anti-join"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-22",
+    "title": "Más carga que cualquier optativa",
+    "topic": "subconsultas",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 22",
+    "statement": "Listar las asignaturas cuya carga horaria sea **mayor que la de todas las asignaturas no obligatorias** (es decir, que supere incluso a la optativa con más carga). Mostrar **id, nombre y carga horaria**.",
+    "tables": [
+      "asignaturas"
+    ],
+    "solution": "SELECT id_asignatura, nombre, carga_horaria\nFROM asignaturas\nWHERE carga_horaria > ALL (\n  SELECT carga_horaria\n  FROM asignaturas\n  WHERE es_obligatoria = 0\n);",
+    "explanation": "`> ALL (subconsulta)` es verdadero si el valor supera a **todos** los valores devueltos. Es equivalente a `> (SELECT MAX(carga_horaria) FROM asignaturas WHERE es_obligatoria = 0)`.\n\nDiferencia con `ANY`: `> ANY` es verdadero si supera a **alguno** (equivale a `> MIN(...)`).",
+    "hints": [
+      "\"Mayor que todas\" se escribe > ALL (subconsulta).",
+      "Otra forma: comparar contra el MAX de las optativas."
+    ],
+    "concepts": [
+      "ALL",
+      "ANY",
+      "subconsulta de lista"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-23",
+    "title": "Alumnos de carreras virtuales",
+    "topic": "subconsultas",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 23",
+    "statement": "Identificar a los alumnos inscriptos en **al menos una carrera virtual**. Mostrar **id, nombre, apellido, email y teléfono**. Cada alumno debe aparecer **una sola vez**, aunque esté en varias carreras virtuales.",
+    "tables": [
+      "alumnos",
+      "alumno_carrera",
+      "carreras"
+    ],
+    "solution": "SELECT a.id_alumno, a.nombre, a.apellido, a.email, a.telefono\nFROM alumnos a\nWHERE a.id_alumno IN (\n  SELECT ac.id_alumno\n  FROM alumno_carrera ac\n  JOIN carreras c ON c.id_carrera = ac.id_carrera\n  WHERE c.modalidad = 'virtual'\n);",
+    "explanation": "Con `IN (subconsulta)` cada alumno aparece una sola vez naturalmente: la subconsulta solo decide *si* el alumno cumple. Si lo resolvieras con JOIN, un alumno en dos carreras virtuales aparecería dos veces y necesitarías `DISTINCT`.\n\nTambién vale `EXISTS (SELECT 1 FROM alumno_carrera ac JOIN carreras c ... WHERE ac.id_alumno = a.id_alumno AND c.modalidad = 'virtual')`.",
+    "hints": [
+      "¿Qué pasa con los duplicados si usás JOIN?",
+      "IN (subconsulta) o EXISTS evitan duplicar alumnos."
+    ],
+    "concepts": [
+      "IN",
+      "EXISTS",
+      "DISTINCT"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-24",
+    "title": "Docentes sin comisiones 2025 (subconsulta)",
+    "topic": "subconsultas",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 24",
+    "statement": "Mostrar los docentes que **no tienen ninguna comisión en 2025**, resolviéndolo con una **subconsulta**. Mostrar **id, nombre, apellido y email**.",
+    "tables": [
+      "docentes",
+      "comisiones"
+    ],
+    "solution": "SELECT id_docente, nombre, apellido, email\nFROM docentes\nWHERE id_docente NOT IN (\n  SELECT id_docente\n  FROM comisiones\n  WHERE anio = 2025\n);",
+    "explanation": "`NOT IN (SELECT id_docente FROM comisiones WHERE anio = 2025)` excluye a los docentes que aparecen en esa lista.\n\n⚠ Si la subconsulta pudiera devolver NULL, `NOT IN` devolvería **cero filas** (porque `x NOT IN (..., NULL)` es UNKNOWN). Acá `id_docente` es NOT NULL, así que es seguro. `NOT EXISTS` no tiene ese problema.",
+    "hints": [
+      "La subconsulta devuelve los docentes que SÍ tienen comisión en 2025.",
+      "Excluilos con NOT IN o NOT EXISTS."
+    ],
+    "concepts": [
+      "NOT IN",
+      "NOT EXISTS",
+      "NULL en NOT IN"
+    ],
+    "requirements": [
+      {
+        "pattern": "\\(\\s*SELECT",
+        "message": "Resolvelo con una subconsulta."
+      }
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-25",
+    "title": "Asignaturas de departamentos con alto presupuesto",
+    "topic": "subconsultas",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 25",
+    "statement": "Detectar asignaturas que pertenecen a un departamento cuyo **presupuesto supera el promedio** de todos los departamentos y que tienen **más de 5 comisiones** en total. Mostrar **asignatura, departamento y cantidad de comisiones**.",
+    "tables": [
+      "asignaturas",
+      "departamentos",
+      "comisiones"
+    ],
+    "solution": "SELECT a.nombre AS asignatura, d.nombre AS departamento,\n       COUNT(c.id_comision) AS cantidad_comisiones\nFROM asignaturas a\nJOIN departamentos d ON d.id_departamento = a.id_departamento\nJOIN comisiones c    ON c.id_asignatura   = a.id_asignatura\nWHERE d.presupuesto > (SELECT AVG(presupuesto) FROM departamentos)\nGROUP BY a.id_asignatura, a.nombre, d.nombre\nHAVING COUNT(c.id_comision) > 5;",
+    "explanation": "Combina una **subconsulta escalar** en el WHERE (presupuesto promedio) con agregación y `HAVING` (cantidad de comisiones). La subconsulta se evalúa una sola vez porque no depende de la fila externa.",
+    "hints": [
+      "El promedio de presupuesto sale de una subconsulta escalar.",
+      "La cantidad de comisiones se filtra con HAVING."
+    ],
+    "concepts": [
+      "subconsulta escalar",
+      "GROUP BY",
+      "HAVING"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-26",
+    "title": "Alumnos de carreras con muchos activos",
+    "topic": "subconsultas",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 26",
+    "statement": "Determinar qué carreras tienen **más de 20 alumnos activos** y listar los **alumnos activos** de esas carreras. Mostrar **id del alumno, nombre, apellido, id de carrera, nombre de la carrera y cantidad total de activos de la carrera**.",
+    "tables": [
+      "alumno_carrera",
+      "carreras",
+      "alumnos"
+    ],
+    "solution": "SELECT a.id_alumno, a.nombre, a.apellido, c.id_carrera, c.nombre AS carrera, t.activos\nFROM (\n  SELECT id_carrera, COUNT(*) AS activos\n  FROM alumno_carrera\n  WHERE estado = 'activa'\n  GROUP BY id_carrera\n  HAVING COUNT(*) > 20\n) t\nJOIN carreras c        ON c.id_carrera = t.id_carrera\nJOIN alumno_carrera ac ON ac.id_carrera = t.id_carrera AND ac.estado = 'activa'\nJOIN alumnos a         ON a.id_alumno = ac.id_alumno;",
+    "explanation": "Patrón de **tabla derivada**: primero una subconsulta en el `FROM` calcula el agregado y filtra (con HAVING); después se une con las tablas de detalle para listar cada fila. Toda tabla derivada necesita un alias (error 1248 si falta).\n\nOjo: al unir de nuevo con `alumno_carrera` hay que volver a filtrar `estado = 'activa'`, porque se piden solo los alumnos activos.",
+    "hints": [
+      "Calculá en una subconsulta del FROM las carreras con más de 20 activos.",
+      "Después unila con alumno_carrera (solo activos) y alumnos."
+    ],
+    "concepts": [
+      "tabla derivada",
+      "subconsulta en FROM"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-27",
+    "title": "Comisiones de docentes con alta carga",
+    "topic": "subconsultas",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 27",
+    "statement": "Se consideran docentes con alta carga los que tuvieron **más de 3 comisiones en 2025**. Mostrar **id del docente, nombre, apellido, cantidad total de comisiones 2025, id de comisión, año, cuatrimestre y nombre de la asignatura** (una fila por comisión de 2025).",
+    "tables": [
+      "comisiones",
+      "docentes",
+      "asignaturas"
+    ],
+    "solution": "SELECT d.id_docente, d.nombre, d.apellido, t.cantidad,\n       c.id_comision, c.anio, c.cuatrimestre, a.nombre AS asignatura\nFROM (\n  SELECT id_docente, COUNT(*) AS cantidad\n  FROM comisiones\n  WHERE anio = 2025\n  GROUP BY id_docente\n  HAVING COUNT(*) > 3\n) t\nJOIN docentes d    ON d.id_docente = t.id_docente\nJOIN comisiones c  ON c.id_docente = t.id_docente AND c.anio = 2025\nJOIN asignaturas a ON a.id_asignatura = c.id_asignatura;",
+    "explanation": "Patrón de **tabla derivada**: primero una subconsulta en el `FROM` calcula el agregado y filtra (con HAVING); después se une con las tablas de detalle para listar cada fila. Toda tabla derivada necesita un alias (error 1248 si falta).",
+    "hints": [
+      "La subconsulta del FROM agrupa comisiones 2025 por docente con HAVING COUNT(*) > 3.",
+      "Al unir con comisiones para el detalle, filtrá también el año 2025."
+    ],
+    "concepts": [
+      "tabla derivada"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-28",
+    "title": "Exámenes de asignaturas con bajo rendimiento",
+    "topic": "subconsultas",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 28",
+    "statement": "Asignaturas con bajo rendimiento: **más de 30 notas** y **promedio menor a 6**. Mostrar **id y nombre de la asignatura, cantidad de notas, promedio, id de examen, tipo y fecha del examen** (una fila por examen de esas asignaturas).",
+    "tables": [
+      "asignaturas",
+      "comisiones",
+      "examenes",
+      "notas"
+    ],
+    "solution": "SELECT a.id_asignatura, a.nombre AS asignatura, t.cantidad_notas, t.promedio,\n       e.id_examen, e.tipo, e.fecha\nFROM (\n  SELECT c.id_asignatura, COUNT(n.id_nota) AS cantidad_notas, AVG(n.nota) AS promedio\n  FROM comisiones c\n  JOIN examenes e ON e.id_comision = c.id_comision\n  JOIN notas n    ON n.id_examen   = e.id_examen\n  GROUP BY c.id_asignatura\n  HAVING COUNT(n.id_nota) > 30 AND AVG(n.nota) < 6\n) t\nJOIN asignaturas a ON a.id_asignatura = t.id_asignatura\nJOIN comisiones c  ON c.id_asignatura = t.id_asignatura\nJOIN examenes e    ON e.id_comision   = c.id_comision;",
+    "explanation": "Patrón de **tabla derivada**: primero una subconsulta en el `FROM` calcula el agregado y filtra (con HAVING); después se une con las tablas de detalle para listar cada fila. Toda tabla derivada necesita un alias (error 1248 si falta).",
+    "hints": [
+      "Primero calculá por asignatura (vía comisiones y examenes) la cantidad y el promedio de notas.",
+      "Después listá todos los exámenes de esas asignaturas."
+    ],
+    "concepts": [
+      "tabla derivada",
+      "JOIN en cadena"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-29",
+    "title": "Comisiones en aulas de uso frecuente",
+    "topic": "subconsultas",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 29",
+    "statement": "Aulas de uso frecuente: asignadas a **más de 5 comisiones en 2025**. Mostrar **id, nombre, tipo y capacidad del aula, cantidad de comisiones 2025, id de comisión, cuatrimestre y nombre de la asignatura**.",
+    "tables": [
+      "aulas",
+      "comisiones",
+      "asignaturas"
+    ],
+    "solution": "SELECT au.id_aula, au.nombre, au.tipo, au.capacidad, t.cantidad,\n       c.id_comision, c.cuatrimestre, a.nombre AS asignatura\nFROM (\n  SELECT id_aula, COUNT(*) AS cantidad\n  FROM comisiones\n  WHERE anio = 2025\n  GROUP BY id_aula\n  HAVING COUNT(*) > 5\n) t\nJOIN aulas au      ON au.id_aula = t.id_aula\nJOIN comisiones c  ON c.id_aula = t.id_aula AND c.anio = 2025\nJOIN asignaturas a ON a.id_asignatura = c.id_asignatura;",
+    "explanation": "Patrón de **tabla derivada**: primero una subconsulta en el `FROM` calcula el agregado y filtra (con HAVING); después se une con las tablas de detalle para listar cada fila. Toda tabla derivada necesita un alias (error 1248 si falta).",
+    "hints": [
+      "Subconsulta en el FROM: comisiones 2025 agrupadas por aula con HAVING COUNT(*) > 5.",
+      "Al listar el detalle, filtrá también las comisiones de 2025."
+    ],
+    "concepts": [
+      "tabla derivada"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-30",
+    "title": "Inscriptos en mesas de alta demanda",
+    "topic": "subconsultas",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 30",
+    "statement": "Mesas de alta demanda: **más de 15 alumnos inscriptos**. Mostrar **id de mesa, fecha, turno, llamado, nombre de la asignatura, cantidad total de inscriptos, id, nombre y apellido del alumno**.",
+    "tables": [
+      "mesas_finales",
+      "inscripciones_finales",
+      "asignaturas",
+      "alumnos"
+    ],
+    "solution": "SELECT m.id_mesa, m.fecha, m.turno, m.llamado, asig.nombre AS asignatura, t.inscriptos,\n       al.id_alumno, al.nombre, al.apellido\nFROM (\n  SELECT id_mesa, COUNT(*) AS inscriptos\n  FROM inscripciones_finales\n  GROUP BY id_mesa\n  HAVING COUNT(*) > 15\n) t\nJOIN mesas_finales m         ON m.id_mesa = t.id_mesa\nJOIN asignaturas asig        ON asig.id_asignatura = m.id_asignatura\nJOIN inscripciones_finales f ON f.id_mesa = t.id_mesa\nJOIN alumnos al              ON al.id_alumno = f.id_alumno;",
+    "explanation": "Patrón de **tabla derivada**: primero una subconsulta en el `FROM` calcula el agregado y filtra (con HAVING); después se une con las tablas de detalle para listar cada fila. Toda tabla derivada necesita un alias (error 1248 si falta).",
+    "hints": [
+      "Contá inscriptos por mesa en una subconsulta del FROM.",
+      "Uní con mesas_finales, asignaturas e inscripciones_finales + alumnos para el detalle."
+    ],
+    "concepts": [
+      "tabla derivada"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-31",
+    "title": "Salarios altos en departamentos con presupuesto alto",
+    "topic": "subconsultas",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 31",
+    "statement": "Identificar docentes cuyo salario sea **superior al promedio de su propio departamento**, considerando solo departamentos cuyo **presupuesto supera el promedio general**. Mostrar **id, nombre, apellido, salario base e id de departamento**.",
+    "tables": [
+      "docentes",
+      "departamentos"
+    ],
+    "solution": "SELECT d.id_docente, d.nombre, d.apellido, d.salario_base, d.id_departamento\nFROM docentes d\nWHERE d.salario_base > (\n        SELECT AVG(d2.salario_base)\n        FROM docentes d2\n        WHERE d2.id_departamento = d.id_departamento\n      )\n  AND d.id_departamento IN (\n        SELECT id_departamento\n        FROM departamentos\n        WHERE presupuesto > (SELECT AVG(presupuesto) FROM departamentos)\n      );",
+    "explanation": "Se combinan dos subconsultas:\n\n- Una **correlacionada** (`WHERE d2.id_departamento = d.id_departamento`) que se recalcula para cada docente: el promedio *de su* departamento.\n- Una **anidada** dentro de un `IN`: departamentos cuyo presupuesto supera el promedio (que a su vez es otra subconsulta).\n\nSin la correlación, se compararía contra el promedio general (el error del ejercicio 47).",
+    "hints": [
+      "\"Promedio de SU departamento\" pide una subconsulta correlacionada.",
+      "Los departamentos con presupuesto alto salen de un IN con otra subconsulta adentro."
+    ],
+    "concepts": [
+      "subconsulta correlacionada",
+      "subconsultas anidadas"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-32",
+    "title": "Materias exigentes en departamentos con grado",
+    "topic": "subconsultas",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 32",
+    "statement": "Asignaturas cuya carga horaria es **superior al promedio de su departamento**, considerando solo departamentos que tienen **al menos una carrera de grado**. Mostrar **id, nombre, carga horaria e id de departamento**.",
+    "tables": [
+      "asignaturas",
+      "carreras"
+    ],
+    "solution": "SELECT a.id_asignatura, a.nombre, a.carga_horaria, a.id_departamento\nFROM asignaturas a\nWHERE a.carga_horaria > (\n        SELECT AVG(a2.carga_horaria)\n        FROM asignaturas a2\n        WHERE a2.id_departamento = a.id_departamento\n      )\n  AND a.id_departamento IN (\n        SELECT id_departamento FROM carreras WHERE nivel = 'grado'\n      );",
+    "explanation": "Subconsulta correlacionada para el promedio por departamento y `IN (SELECT id_departamento FROM carreras WHERE nivel = 'grado')` para la segunda condición. `EXISTS` también funciona.",
+    "hints": [
+      "Promedio del propio departamento: subconsulta correlacionada.",
+      "\"Al menos una carrera de grado\": IN o EXISTS sobre carreras."
+    ],
+    "concepts": [
+      "subconsulta correlacionada",
+      "IN",
+      "EXISTS"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-34",
+    "title": "Bajo el promedio de las obligatorias",
+    "topic": "subconsultas",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 34",
+    "statement": "Detectar asignaturas con **más de 30 notas** cuyo promedio de notas sea **menor al promedio general de notas de las asignaturas obligatorias**. Mostrar **id, nombre, cantidad de notas y promedio**.",
+    "tables": [
+      "asignaturas",
+      "comisiones",
+      "examenes",
+      "notas"
+    ],
+    "solution": "SELECT a.id_asignatura, a.nombre, COUNT(n.id_nota) AS cantidad_notas, AVG(n.nota) AS promedio\nFROM asignaturas a\nJOIN comisiones c ON c.id_asignatura = a.id_asignatura\nJOIN examenes e   ON e.id_comision   = c.id_comision\nJOIN notas n      ON n.id_examen     = e.id_examen\nGROUP BY a.id_asignatura, a.nombre\nHAVING COUNT(n.id_nota) > 30\n   AND AVG(n.nota) < (\n        SELECT AVG(n2.nota)\n        FROM notas n2\n        JOIN examenes e2    ON e2.id_examen     = n2.id_examen\n        JOIN comisiones c2  ON c2.id_comision   = e2.id_comision\n        JOIN asignaturas a2 ON a2.id_asignatura = c2.id_asignatura\n        WHERE a2.es_obligatoria = 1\n      );",
+    "explanation": "El valor de referencia es un solo número: el promedio de **todas las notas** de asignaturas obligatorias. Se calcula con una subconsulta escalar dentro del `HAVING`, que recorre el mismo camino de JOIN pero filtrando `es_obligatoria = 1`.\n\nOjo: \"promedio de las notas de obligatorias\" no es lo mismo que \"promedio de los promedios de cada obligatoria\"; acá se toma el primero.",
+    "hints": [
+      "Calculá primero el promedio de referencia por separado y verificá que te dé un solo número.",
+      "Usalo en el HAVING junto con COUNT > 30."
+    ],
+    "concepts": [
+      "subconsulta en HAVING"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-35",
+    "title": "Docentes de materias exigentes en 2025",
+    "topic": "subconsultas",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 35",
+    "statement": "Detectar docentes que en **2025** tuvieron comisiones en asignaturas cuya carga horaria es **superior al promedio de su departamento**. Mostrar **id, nombre y apellido** del docente, **sin repetidos**.",
+    "tables": [
+      "docentes",
+      "comisiones",
+      "asignaturas"
+    ],
+    "solution": "SELECT DISTINCT d.id_docente, d.nombre, d.apellido\nFROM docentes d\nJOIN comisiones c  ON c.id_docente = d.id_docente\nJOIN asignaturas a ON a.id_asignatura = c.id_asignatura\nWHERE c.anio = 2025\n  AND a.carga_horaria > (\n        SELECT AVG(a2.carga_horaria)\n        FROM asignaturas a2\n        WHERE a2.id_departamento = a.id_departamento\n      );",
+    "explanation": "Un docente puede tener varias comisiones que cumplen, por eso hace falta `DISTINCT` (o un `IN` / `EXISTS`). La subconsulta correlacionada compara cada asignatura contra el promedio de su departamento.",
+    "hints": [
+      "Uní docentes con comisiones 2025 y asignaturas.",
+      "Compará la carga de la asignatura con el promedio de su departamento.",
+      "Evitá duplicados."
+    ],
+    "concepts": [
+      "DISTINCT",
+      "subconsulta correlacionada"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-37",
+    "title": "Docentes posiblemente sobrecargados",
+    "topic": "integradores",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 37",
+    "statement": "Docentes que durante **2025** tuvieron **más de 3 comisiones**, con **cupo promedio superior al promedio general de cupos de 2025**, y que dictaron **al menos una asignatura obligatoria** ese año. Mostrar **id, nombre, apellido, cantidad de comisiones 2025 y cupo promedio**.",
+    "tables": [
+      "docentes",
+      "comisiones",
+      "asignaturas"
+    ],
+    "solution": "SELECT d.id_docente, d.nombre, d.apellido,\n       COUNT(*) AS comisiones_2025, AVG(c.cupo) AS cupo_promedio\nFROM docentes d\nJOIN comisiones c ON c.id_docente = d.id_docente\nWHERE c.anio = 2025\nGROUP BY d.id_docente, d.nombre, d.apellido\nHAVING COUNT(*) > 3\n   AND AVG(c.cupo) > (SELECT AVG(cupo) FROM comisiones WHERE anio = 2025)\n   AND d.id_docente IN (\n        SELECT c2.id_docente\n        FROM comisiones c2\n        JOIN asignaturas a ON a.id_asignatura = c2.id_asignatura\n        WHERE c2.anio = 2025 AND a.es_obligatoria = 1\n      );",
+    "explanation": "Tres condiciones de distinto tipo:\n\n1. `COUNT(*) > 3`: agregado → HAVING.\n2. `AVG(c.cupo) > (SELECT AVG(cupo) FROM comisiones WHERE anio = 2025)`: agregado contra subconsulta escalar → HAVING.\n3. Dictó alguna obligatoria: `IN` / `EXISTS` (no se puede poner `es_obligatoria = 1` en el WHERE porque cambiaría el conteo de comisiones).",
+    "hints": [
+      "Agrupá comisiones 2025 por docente.",
+      "El cupo promedio general sale de una subconsulta escalar.",
+      "Para \"al menos una obligatoria\" usá IN o EXISTS, no un filtro en el WHERE."
+    ],
+    "concepts": [
+      "HAVING con subconsulta",
+      "IN",
+      "integrador"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-39",
+    "title": "Aulas pequeñas muy usadas",
+    "topic": "integradores",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 39",
+    "statement": "Aulas críticas: **capacidad menor al promedio** general de capacidades y **más de 5 comisiones en 2025**. Mostrar **id, nombre, capacidad y cantidad de comisiones 2025**.",
+    "tables": [
+      "aulas",
+      "comisiones"
+    ],
+    "solution": "SELECT au.id_aula, au.nombre, au.capacidad, COUNT(c.id_comision) AS comisiones_2025\nFROM aulas au\nJOIN comisiones c ON c.id_aula = au.id_aula AND c.anio = 2025\nWHERE au.capacidad < (SELECT AVG(capacidad) FROM aulas)\nGROUP BY au.id_aula, au.nombre, au.capacidad\nHAVING COUNT(c.id_comision) > 5;",
+    "explanation": "La condición sobre la capacidad no es agregada respecto del grupo (es un dato del aula), así que puede ir en el WHERE comparando contra una subconsulta escalar. La condición sobre la cantidad de comisiones va en HAVING.",
+    "hints": [
+      "Capacidad < (SELECT AVG(capacidad) FROM aulas).",
+      "Comisiones 2025 por aula con HAVING > 5."
+    ],
+    "concepts": [
+      "subconsulta escalar",
+      "HAVING"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-40",
+    "title": "Departamentos críticos",
+    "topic": "integradores",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 40",
+    "statement": "Departamentos que tienen **al menos una carrera con más de 25 alumnos activos** y **al menos una asignatura con más de 30 notas cuyo promedio sea menor al promedio general** de notas. Mostrar **id y nombre del departamento, cantidad de carreras con alta demanda y cantidad de asignaturas con bajo rendimiento**.",
+    "tables": [
+      "departamentos",
+      "carreras",
+      "alumno_carrera",
+      "asignaturas",
+      "comisiones",
+      "examenes",
+      "notas"
+    ],
+    "solution": "SELECT dep.id_departamento, dep.nombre AS departamento,\n       alta.carreras_alta_demanda, baja.asignaturas_bajo_rendimiento\nFROM departamentos dep\nJOIN (\n  SELECT c.id_departamento, COUNT(*) AS carreras_alta_demanda\n  FROM carreras c\n  WHERE (SELECT COUNT(*) FROM alumno_carrera ac\n          WHERE ac.id_carrera = c.id_carrera AND ac.estado = 'activa') > 25\n  GROUP BY c.id_departamento\n) alta ON alta.id_departamento = dep.id_departamento\nJOIN (\n  SELECT x.id_departamento, COUNT(*) AS asignaturas_bajo_rendimiento\n  FROM (\n    SELECT a.id_asignatura, a.id_departamento\n    FROM asignaturas a\n    JOIN comisiones c ON c.id_asignatura = a.id_asignatura\n    JOIN examenes e   ON e.id_comision   = c.id_comision\n    JOIN notas n      ON n.id_examen     = e.id_examen\n    GROUP BY a.id_asignatura, a.id_departamento\n    HAVING COUNT(n.id_nota) > 30\n       AND AVG(n.nota) < (SELECT AVG(nota) FROM notas)\n  ) x\n  GROUP BY x.id_departamento\n) baja ON baja.id_departamento = dep.id_departamento;",
+    "explanation": "Se arman dos tablas derivadas independientes (una cuenta carreras de alta demanda por departamento, otra asignaturas de bajo rendimiento) y se unen con `departamentos` mediante **INNER JOIN**: así solo quedan los departamentos que cumplen **las dos** condiciones.\n\nUnir las dos cosas en un solo JOIN gigante multiplicaría filas (cada carrera × cada nota) y los conteos saldrían mal.",
+    "hints": [
+      "Resolvé cada condición en su propia subconsulta del FROM, agrupada por departamento.",
+      "Uní ambas con departamentos con INNER JOIN.",
+      "No mezcles carreras y notas en el mismo GROUP BY: se multiplican las filas."
+    ],
+    "concepts": [
+      "tablas derivadas",
+      "integrador"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-41",
+    "title": "Alumnos sin teléfono",
+    "topic": "correccion",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 41",
+    "statement": "La secretaría académica quiere obtener los alumnos que **no tengan teléfono registrado**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "alumnos"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT a.id_alumno, a.nombre, a.apellido, a.email, a.telefono\nFROM alumnos a\nWHERE a.telefono = NULL;\n",
+    "solution": "SELECT a.id_alumno, a.nombre, a.apellido, a.email, a.telefono\nFROM alumnos a\nWHERE a.telefono IS NULL;",
+    "explanation": "`= NULL` nunca es verdadero: cualquier comparación con NULL da UNKNOWN. Para preguntar por NULL se usa `IS NULL` (o `IS NOT NULL`).\n\nEn estos datos todos los alumnos tienen teléfono, así que el resultado correcto es vacío, pero la consulta original igual está mal.",
+    "hints": [
+      "¿Qué devuelve una comparación con NULL?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "IS NULL"
+    ],
+    "requirements": [
+      {
+        "pattern": "IS\\s+NULL",
+        "message": "Para comparar con NULL se usa IS NULL."
+      }
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-42",
+    "title": "Carreras virtuales de grado o posgrado",
+    "topic": "correccion",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 42",
+    "statement": "Listar las carreras cuyo nivel sea **grado o posgrado**, siempre que tengan **modalidad virtual**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "carreras"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT c.id_carrera, c.nombre, c.nivel, c.modalidad\nFROM carreras c\nWHERE c.nivel = 'grado' OR c.nivel = 'posgrado' AND c.modalidad = 'virtual';\n",
+    "solution": "SELECT c.id_carrera, c.nombre, c.nivel, c.modalidad\nFROM carreras c\nWHERE (c.nivel = 'grado' OR c.nivel = 'posgrado')\n  AND c.modalidad = 'virtual';",
+    "explanation": "`AND` tiene **mayor precedencia** que `OR`. La consulta original se evalúa como `nivel = 'grado' OR (nivel = 'posgrado' AND modalidad = 'virtual')`, y trae todas las de grado aunque no sean virtuales. Se corrige con paréntesis o con `nivel IN ('grado', 'posgrado')`.",
+    "hints": [
+      "¿Qué se evalúa primero, AND u OR?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "precedencia AND/OR",
+      "IN"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-43",
+    "title": "Asignaturas por departamento (todos)",
+    "topic": "correccion",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 43",
+    "statement": "Conocer la cantidad de asignaturas por departamento, **incluyendo los departamentos sin asignaturas**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "asignaturas",
+      "departamentos"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT d.id_departamento, d.nombre AS departamento, COUNT(a.id_asignatura) AS cantidad_asignaturas\nFROM departamentos d\nINNER JOIN asignaturas a ON d.id_departamento = a.id_departamento\nGROUP BY d.id_departamento, d.nombre\nORDER BY cantidad_asignaturas DESC;\n",
+    "solution": "SELECT d.id_departamento, d.nombre AS departamento, COUNT(a.id_asignatura) AS cantidad_asignaturas\nFROM departamentos d\nLEFT JOIN asignaturas a ON d.id_departamento = a.id_departamento\nGROUP BY d.id_departamento, d.nombre\nORDER BY cantidad_asignaturas DESC;",
+    "explanation": "Con `INNER JOIN`, un departamento sin asignaturas no tiene filas para unir y desaparece. Hay que usar `LEFT JOIN` y contar `COUNT(a.id_asignatura)`, que da 0 para esos departamentos.\n\nEn estos datos todos los departamentos tienen asignaturas, así que el resultado coincide, pero la consulta no cumple el enunciado en general.",
+    "hints": [
+      "¿Qué pasa con un departamento sin asignaturas en un INNER JOIN?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "LEFT JOIN"
+    ],
+    "requirements": [
+      {
+        "pattern": "LEFT\\s+(OUTER\\s+)?JOIN",
+        "message": "Para incluir departamentos sin asignaturas hace falta LEFT JOIN."
+      }
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-44",
+    "title": "Alumnos en más de una carrera",
+    "topic": "correccion",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 44",
+    "statement": "Identificar alumnos inscriptos en **más de una carrera**, sin importar el estado.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "alumnos",
+      "alumno_carrera"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT a.id_alumno, a.nombre, a.apellido, COUNT(ac.id_carrera) AS cantidad_carreras\nFROM alumnos a\nINNER JOIN alumno_carrera ac ON a.id_alumno = ac.id_alumno\nWHERE COUNT(ac.id_carrera) > 1\nGROUP BY a.id_alumno, a.nombre, a.apellido;\n",
+    "solution": "SELECT a.id_alumno, a.nombre, a.apellido, COUNT(ac.id_carrera) AS cantidad_carreras\nFROM alumnos a\nINNER JOIN alumno_carrera ac ON a.id_alumno = ac.id_alumno\nGROUP BY a.id_alumno, a.nombre, a.apellido\nHAVING COUNT(ac.id_carrera) > 1;",
+    "explanation": "No se pueden usar funciones de agregación en el `WHERE` (error 1111): el WHERE filtra filas **antes** de agrupar, cuando COUNT todavía no existe. La condición va en `HAVING`, después del `GROUP BY`.",
+    "hints": [
+      "¿En qué momento se calcula COUNT()?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "HAVING",
+      "error 1111"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-45",
+    "title": "Promedio por alumno",
+    "topic": "correccion",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 45",
+    "statement": "Obtener el promedio de nota por alumno, considerando solo alumnos con **al menos una nota**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "alumnos",
+      "notas"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT a.id_alumno, a.nombre, a.apellido, AVG(n.nota) AS promedio_nota\nFROM alumnos a\nINNER JOIN notas n ON a.id_alumno = n.id_alumno\nGROUP BY a.id_alumno, a.nombre, a.apellido\nORDER BY promedio_nota DESC;\n",
+    "solution": "SELECT a.id_alumno, a.nombre, a.apellido, AVG(n.nota) AS promedio_nota\nFROM alumnos a\nINNER JOIN notas n ON a.id_alumno = n.id_alumno\nGROUP BY a.id_alumno, a.nombre, a.apellido\nORDER BY promedio_nota DESC;",
+    "explanation": "La consulta **es correcta**: el `INNER JOIN` con `notas` deja afuera a los alumnos sin notas (justo lo que pide el enunciado), se agrupa por alumno y `AVG` calcula el promedio. Si se quisiera incluir alumnos sin notas, haría falta LEFT JOIN.",
+    "hints": [
+      "¿El INNER JOIN deja afuera a alguien que el enunciado quiera incluir?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "INNER JOIN",
+      "AVG()"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-46",
+    "title": "Asignaturas con comisiones en 2025",
+    "topic": "correccion",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 46",
+    "statement": "Listar las asignaturas con **al menos una comisión abierta en 2025**, mostrando **id, nombre y cantidad de comisiones 2025**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "comisiones",
+      "asignaturas"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT a.id_asignatura, a.nombre AS asignatura, COUNT(c.id_comision) AS cantidad_comisiones_2025\nFROM asignaturas a\nLEFT JOIN comisiones c ON a.id_asignatura = c.id_asignatura\nWHERE COUNT(c.id_comision) > 0;\n",
+    "solution": "SELECT a.id_asignatura, a.nombre AS asignatura, COUNT(c.id_comision) AS cantidad_comisiones_2025\nFROM asignaturas a\nINNER JOIN comisiones c ON a.id_asignatura = c.id_asignatura\nWHERE c.anio = 2025\nGROUP BY a.id_asignatura, a.nombre;",
+    "explanation": "Tres problemas: (1) `COUNT` en el `WHERE` (error 1111); (2) falta el `GROUP BY`; (3) **nunca se filtra el año 2025**. Como se piden asignaturas que *sí* tienen comisiones, alcanza con `INNER JOIN` + `WHERE c.anio = 2025` + `GROUP BY`.",
+    "hints": [
+      "Hay más de un error: revisá WHERE, GROUP BY y el año.",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "GROUP BY",
+      "WHERE"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-47",
+    "title": "Salario sobre el promedio de su departamento",
+    "topic": "correccion",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 47",
+    "statement": "Identificar docentes con salario base **superior al promedio de los docentes de su mismo departamento**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "docentes"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT d.id_docente, d.nombre, d.apellido, d.salario_base, d.id_departamento\nFROM docentes d\nWHERE d.salario_base > (\n  SELECT AVG(d2.salario_base)\n  FROM docentes d2);\n",
+    "solution": "SELECT d.id_docente, d.nombre, d.apellido, d.salario_base, d.id_departamento\nFROM docentes d\nWHERE d.salario_base > (\n  SELECT AVG(d2.salario_base)\n  FROM docentes d2\n  WHERE d2.id_departamento = d.id_departamento\n);",
+    "explanation": "La subconsulta calcula el promedio de **todos** los docentes. Para que sea *de su departamento* tiene que estar **correlacionada**: `WHERE d2.id_departamento = d.id_departamento`.",
+    "hints": [
+      "¿La subconsulta sabe de qué departamento es el docente de la consulta externa?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "subconsulta correlacionada"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-48",
+    "title": "Comisiones con cupo mayor a la capacidad",
+    "topic": "correccion",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 48",
+    "statement": "Detectar comisiones de **2025** cuyo **cupo supera la capacidad del aula** asignada. Mostrar id, nombre y capacidad del aula, id de comisión y cupo.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "aulas",
+      "comisiones"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT au.id_aula, au.nombre AS aula, au.capacidad, c.id_comision, c.cupo\nFROM aulas au\nINNER JOIN comisiones c ON au.id_aula = c.id_aula\nWHERE c.anio = 2025 AND c.cupo > au.capacidad;\n",
+    "solution": "SELECT au.id_aula, au.nombre AS aula, au.capacidad, c.id_comision, c.cupo\nFROM aulas au\nINNER JOIN comisiones c ON au.id_aula = c.id_aula\nWHERE c.anio = 2025 AND c.cupo > au.capacidad;",
+    "explanation": "La consulta **es correcta**: el JOIN relaciona cada comisión con su aula y el WHERE compara dos columnas de la misma fila combinada (`c.cupo > au.capacidad`) además del año.",
+    "hints": [
+      "¿Se pueden comparar dos columnas entre sí en el WHERE?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "JOIN",
+      "comparación entre columnas"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-49",
+    "title": "Asignaturas con promedio menor a 6",
+    "topic": "correccion",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 49",
+    "statement": "Conocer las asignaturas cuyo promedio de notas sea **menor a 6**. Las notas se relacionan con las asignaturas **a través de comisiones y exámenes**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "asignaturas",
+      "comisiones",
+      "examenes",
+      "notas"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT a.id_asignatura, a.nombre AS asignatura, AVG(n.nota) AS promedio_nota\nFROM asignaturas a\nINNER JOIN examenes e ON a.id_asignatura = e.id_asignatura\nINNER JOIN notas n ON e.id_examen = n.id_examen\nGROUP BY a.id_asignatura, a.nombre\nHAVING AVG(n.nota) < 6;\n",
+    "solution": "SELECT a.id_asignatura, a.nombre AS asignatura, AVG(n.nota) AS promedio_nota\nFROM asignaturas a\nINNER JOIN comisiones c ON a.id_asignatura = c.id_asignatura\nINNER JOIN examenes e   ON c.id_comision = e.id_comision\nINNER JOIN notas n      ON e.id_examen = n.id_examen\nGROUP BY a.id_asignatura, a.nombre\nHAVING AVG(n.nota) < 6;",
+    "explanation": "`examenes` no tiene `id_asignatura` (error 1054): un examen pertenece a una **comisión**, y la comisión a una asignatura. El camino correcto es `asignaturas → comisiones → examenes → notas`.",
+    "hints": [
+      "Revisá las columnas de examenes en el esquema.",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "JOIN en cadena",
+      "error 1054"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-50",
+    "title": "Departamentos con muchas obligatorias y alto presupuesto",
+    "topic": "correccion",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 50",
+    "statement": "Identificar departamentos con **más de 5 asignaturas obligatorias** y **presupuesto superior al promedio**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "departamentos",
+      "asignaturas"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT d.id_departamento, d.nombre AS departamento, d.presupuesto, COUNT(a.id_asignatura) AS cantidad_obligatorias\nFROM departamentos d\nINNER JOIN asignaturas a ON d.id_departamento = a.id_departamento\nWHERE a.es_obligatoria = 1\nGROUP BY d.id_departamento, d.nombre, d.presupuesto\nHAVING COUNT(a.id_asignatura) > 5\n   AND d.presupuesto > (\n     SELECT AVG(d2.presupuesto)\n     FROM departamentos d2\n   )\nORDER BY cantidad_obligatorias DESC;\n",
+    "solution": "SELECT d.id_departamento, d.nombre AS departamento, d.presupuesto, COUNT(a.id_asignatura) AS cantidad_obligatorias\nFROM departamentos d\nINNER JOIN asignaturas a ON d.id_departamento = a.id_departamento\nWHERE a.es_obligatoria = 1\nGROUP BY d.id_departamento, d.nombre, d.presupuesto\nHAVING COUNT(a.id_asignatura) > 5\n   AND d.presupuesto > (\n     SELECT AVG(d2.presupuesto)\n     FROM departamentos d2\n   )\nORDER BY cantidad_obligatorias DESC;",
+    "explanation": "La consulta **es correcta**. `d.presupuesto` puede usarse en el `HAVING` porque está en el `GROUP BY`, y la subconsulta escalar calcula el promedio general. (También sería válido poner esa condición en el WHERE.)",
+    "hints": [
+      "¿Se puede usar en HAVING una columna que está en el GROUP BY?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "HAVING",
+      "subconsulta escalar"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-51",
+    "title": "Comisiones por docente en 2025",
+    "topic": "correccion",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 51",
+    "statement": "Conocer la cantidad de comisiones por docente en **2025**, mostrando **id, nombre, apellido y cantidad**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "comisiones",
+      "docentes"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT d.id_docente, d.nombre, d.apellido, c.id_comision, COUNT(c.id_comision) AS cantidad_comisiones\nFROM docentes d\nINNER JOIN comisiones c ON d.id_docente = c.id_docente\nWHERE c.anio = 2025\nGROUP BY d.id_docente, d.nombre, d.apellido;\n",
+    "solution": "SELECT d.id_docente, d.nombre, d.apellido, COUNT(c.id_comision) AS cantidad_comisiones\nFROM docentes d\nINNER JOIN comisiones c ON d.id_docente = c.id_docente\nWHERE c.anio = 2025\nGROUP BY d.id_docente, d.nombre, d.apellido;",
+    "explanation": "`c.id_comision` en el SELECT no está en el `GROUP BY` ni dentro de una función de agregación: con `ONLY_FULL_GROUP_BY` da error 1055. Además no tiene sentido: cada grupo tiene varias comisiones. Se quita esa columna.",
+    "hints": [
+      "¿Qué id_comision mostraría MySQL si el grupo tiene 5 comisiones?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "ONLY_FULL_GROUP_BY",
+      "error 1055"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-52",
+    "title": "Carreras con más de 20 activos",
+    "topic": "correccion",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 52",
+    "statement": "Identificar carreras con **más de 20 alumnos con inscripción activa**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "carreras",
+      "alumno_carrera"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT c.id_carrera, c.nombre AS carrera, COUNT(ac.id_alumno) AS cantidad_alumnos_activos\nFROM carreras c\nINNER JOIN alumno_carrera ac ON c.id_carrera = ac.id_carrera\nWHERE ac.estado = 'activa' AND COUNT(ac.id_alumno) > 20\nGROUP BY c.id_carrera, c.nombre;\n",
+    "solution": "SELECT c.id_carrera, c.nombre AS carrera, COUNT(ac.id_alumno) AS cantidad_alumnos_activos\nFROM carreras c\nINNER JOIN alumno_carrera ac ON c.id_carrera = ac.id_carrera\nWHERE ac.estado = 'activa'\nGROUP BY c.id_carrera, c.nombre\nHAVING COUNT(ac.id_alumno) > 20;",
+    "explanation": "`estado = 'activa'` filtra filas: va bien en el WHERE. Pero `COUNT(...) > 20` filtra grupos: tiene que ir en `HAVING` (error 1111 en el WHERE).",
+    "hints": [
+      "Separá: ¿qué condición filtra filas y cuál filtra grupos?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "WHERE vs HAVING"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-53",
+    "title": "Salario sobre el promedio (subconsulta mal armada)",
+    "topic": "correccion",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 53",
+    "statement": "Listar docentes cuyo salario base sea **superior al promedio salarial de su departamento**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "docentes"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT d.id_docente, d.nombre, d.apellido, d.salario_base\nFROM docentes d\nWHERE d.salario_base > (\n  SELECT d2.id_departamento, AVG(d2.salario_base)\n  FROM docentes d2\n  GROUP BY d2.id_departamento\n);\n",
+    "solution": "SELECT d.id_docente, d.nombre, d.apellido, d.salario_base\nFROM docentes d\nWHERE d.salario_base > (\n  SELECT AVG(d2.salario_base)\n  FROM docentes d2\n  WHERE d2.id_departamento = d.id_departamento\n);",
+    "explanation": "La subconsulta devuelve **dos columnas y varias filas**, pero se usa con `>`, que necesita un único valor (error 1241). La forma correcta es una subconsulta escalar **correlacionada** que devuelva solo el promedio del departamento del docente.",
+    "hints": [
+      "¿Cuántas columnas y filas puede devolver una subconsulta usada con >?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "subconsulta escalar",
+      "error 1241"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-54",
+    "title": "Asignaturas de departamentos con presupuesto alto",
+    "topic": "correccion",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 54",
+    "statement": "Listar asignaturas de departamentos cuyo **presupuesto sea mayor al promedio** general.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "asignaturas",
+      "departamentos"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT a.id_asignatura, a.nombre AS asignatura, a.id_departamento\nFROM asignaturas a\nWHERE a.id_departamento IN (\n  SELECT d.presupuesto\n  FROM departamentos d\n  WHERE d.presupuesto > (\n    SELECT AVG(d2.presupuesto)\n    FROM departamentos d2\n  )\n);\n",
+    "solution": "SELECT a.id_asignatura, a.nombre AS asignatura, a.id_departamento\nFROM asignaturas a\nWHERE a.id_departamento IN (\n  SELECT d.id_departamento\n  FROM departamentos d\n  WHERE d.presupuesto > (\n    SELECT AVG(d2.presupuesto)\n    FROM departamentos d2\n  )\n);",
+    "explanation": "Error lógico, sin mensaje de MySQL: el `IN` compara `id_departamento` contra una lista de **presupuestos**. Los tipos son compatibles, así que no falla, pero nunca coincide y devuelve 0 filas. La subconsulta tiene que devolver `d.id_departamento`.",
+    "hints": [
+      "¿Qué columna compara el IN y qué columna devuelve la subconsulta?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "IN",
+      "errores lógicos"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-55",
+    "title": "Aulas y comisiones 2025 (incluyendo sin uso)",
+    "topic": "correccion",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 55",
+    "statement": "Listar **todas** las aulas, incluso las que no tuvieron comisiones en 2025, con la **cantidad de comisiones 2025** de cada una.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "comisiones",
+      "aulas"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT au.id_aula, au.nombre AS aula, au.tipo, COUNT(c.id_comision) AS cantidad_comisiones_2025\nFROM aulas au\nLEFT JOIN comisiones c ON au.id_aula = c.id_aula\nWHERE c.anio = 2025\nGROUP BY au.id_aula, au.nombre, au.tipo;\n",
+    "solution": "SELECT au.id_aula, au.nombre AS aula, au.tipo, COUNT(c.id_comision) AS cantidad_comisiones_2025\nFROM aulas au\nLEFT JOIN comisiones c\n       ON au.id_aula = c.id_aula\n      AND c.anio = 2025\nGROUP BY au.id_aula, au.nombre, au.tipo;",
+    "explanation": "La condición `c.anio = 2025` en el `WHERE` elimina las filas con NULL que genera el LEFT JOIN, y las aulas sin comisiones 2025 desaparecen (el LEFT JOIN se comporta como INNER). La condición tiene que ir en el `ON`.\n\nEn estos datos todas las aulas tienen comisiones en 2025, así que el resultado coincide, pero la consulta no cumple el enunciado.",
+    "hints": [
+      "¿Qué pasa con las filas NULL del LEFT JOIN cuando el WHERE pregunta por c.anio?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "LEFT JOIN",
+      "condición en ON"
+    ],
+    "requirements": [
+      {
+        "pattern": "(ON|AND)\\s+[\\w.`]*anio\\s*=\\s*2025|\\(\\s*SELECT[^)]*anio\\s*=\\s*2025",
+        "message": "La condición del año tiene que ir en el ON del LEFT JOIN (o en una subconsulta), no en el WHERE."
+      }
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-56",
+    "title": "Asignaturas por departamento con COUNT(*)",
+    "topic": "correccion",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 56",
+    "statement": "Conocer la cantidad de asignaturas por departamento, **incluyendo departamentos sin asignaturas**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "asignaturas",
+      "departamentos"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT d.id_departamento, d.nombre AS departamento, COUNT(*) AS cantidad_asignaturas\nFROM departamentos d\nLEFT JOIN asignaturas a ON d.id_departamento = a.id_departamento\nGROUP BY d.id_departamento, d.nombre;\n",
+    "solution": "SELECT d.id_departamento, d.nombre AS departamento, COUNT(a.id_asignatura) AS cantidad_asignaturas\nFROM departamentos d\nLEFT JOIN asignaturas a ON d.id_departamento = a.id_departamento\nGROUP BY d.id_departamento, d.nombre;",
+    "explanation": "El LEFT JOIN está bien, pero `COUNT(*)` cuenta filas: un departamento sin asignaturas genera **una** fila (con NULL) y daría 1 en vez de 0. Hay que contar una columna de la tabla derecha: `COUNT(a.id_asignatura)`, que ignora los NULL.",
+    "hints": [
+      "¿Cuánto da COUNT(*) para un departamento sin asignaturas después del LEFT JOIN?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "COUNT(*) vs COUNT(col)"
+    ],
+    "requirements": [
+      {
+        "pattern": "COUNT\\s*\\(\\s*\\*\\s*\\)",
+        "message": "COUNT(*) cuenta la fila con NULL del LEFT JOIN: contá una columna de asignaturas.",
+        "forbid": true
+      }
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-57",
+    "title": "Promedio por asignatura menor a 6",
+    "topic": "correccion",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 57",
+    "statement": "Obtener el promedio de nota por asignatura, mostrando solo las de **promedio menor a 6**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "asignaturas",
+      "comisiones",
+      "examenes",
+      "notas"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT a.id_asignatura, a.nombre AS asignatura, AVG(n.nota) AS promedio_nota\nFROM asignaturas a\nINNER JOIN comisiones c ON a.id_asignatura = c.id_asignatura\nINNER JOIN examenes e ON c.id_comision = e.id_comision\nINNER JOIN notas n ON e.id_examen = n.id_examen\nGROUP BY a.id_asignatura, a.nombre\nHAVING AVG(n.nota) < 6;\n",
+    "solution": "SELECT a.id_asignatura, a.nombre AS asignatura, AVG(n.nota) AS promedio_nota\nFROM asignaturas a\nINNER JOIN comisiones c ON a.id_asignatura = c.id_asignatura\nINNER JOIN examenes e ON c.id_comision = e.id_comision\nINNER JOIN notas n ON e.id_examen = n.id_examen\nGROUP BY a.id_asignatura, a.nombre\nHAVING AVG(n.nota) < 6;",
+    "explanation": "La consulta **es correcta**: recorre bien el camino asignaturas → comisiones → exámenes → notas y filtra el promedio en el HAVING. Es la versión corregida del ejercicio 49.",
+    "hints": [
+      "Compará el camino de JOIN con el del ejercicio 49.",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "JOIN en cadena",
+      "HAVING"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-58",
+    "title": "Alumnos sin carrera (NOT IN)",
+    "topic": "correccion",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 58",
+    "statement": "Identificar alumnos que **no estén inscriptos en ninguna carrera**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "alumnos",
+      "alumno_carrera"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT a.id_alumno, a.nombre, a.apellido\nFROM alumnos a\nWHERE a.id_alumno NOT IN (\n  SELECT ac.id_alumno\n  FROM alumno_carrera ac\n);\n",
+    "solution": "SELECT a.id_alumno, a.nombre, a.apellido\nFROM alumnos a\nWHERE a.id_alumno NOT IN (\n  SELECT ac.id_alumno\n  FROM alumno_carrera ac\n);",
+    "explanation": "La consulta **es correcta**. `NOT IN` funciona porque `alumno_carrera.id_alumno` es NOT NULL: si la subconsulta pudiera devolver un NULL, el resultado sería vacío. `NOT EXISTS` o `LEFT JOIN ... IS NULL` son alternativas sin ese riesgo.",
+    "hints": [
+      "¿Hay algún riesgo con NOT IN y los NULL?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "NOT IN",
+      "NULL"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-59",
+    "title": "Notas por tipo de examen",
+    "topic": "correccion",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 59",
+    "statement": "Conocer la cantidad de notas por tipo de examen (y su promedio), solo para tipos con **más de 100 notas**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "notas",
+      "examenes"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT e.tipo, COUNT(n.nota) AS cantidad_notas, AVG(n.nota) AS promedio_nota\nFROM examenes e\nINNER JOIN notas n ON e.id_examen = n.id_examen\nWHERE COUNT(n.nota) > 100\nGROUP BY e.tipo;\n",
+    "solution": "SELECT e.tipo, COUNT(n.nota) AS cantidad_notas, AVG(n.nota) AS promedio_nota\nFROM examenes e\nINNER JOIN notas n ON e.id_examen = n.id_examen\nGROUP BY e.tipo\nHAVING COUNT(n.nota) > 100;",
+    "explanation": "Otra vez COUNT en el WHERE (error 1111). El filtro va en `HAVING COUNT(n.nota) > 100` después del `GROUP BY`.",
+    "hints": [
+      "¿WHERE o HAVING?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "HAVING"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  },
+  {
+    "id": "u-tp3-60",
+    "title": "Departamentos sobre el promedio (AVG en WHERE)",
+    "topic": "correccion",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "readonly",
+    "source": "TP3 Ej. 60",
+    "statement": "Identificar departamentos con **más de 5 asignaturas obligatorias** y **presupuesto mayor al promedio general**.\n\nEl editor ya tiene la **consulta propuesta**. Decidí si es correcta: si tiene errores, corregila; si es correcta, comprobala tal cual. Pensá también *por qué*, como lo pide el TP.",
+    "tables": [
+      "departamentos",
+      "asignaturas"
+    ],
+    "starterSql": "-- Consulta propuesta. ¿Es correcta? Si no, corregila.\nSELECT d.id_departamento, d.nombre AS departamento, d.presupuesto, COUNT(a.id_asignatura) AS cantidad_obligatorias\nFROM departamentos d\nINNER JOIN asignaturas a ON d.id_departamento = a.id_departamento\nWHERE a.es_obligatoria = 1 AND d.presupuesto > AVG(d.presupuesto)\nGROUP BY d.id_departamento, d.nombre, d.presupuesto\nHAVING COUNT(a.id_asignatura) > 5;\n",
+    "solution": "SELECT d.id_departamento, d.nombre AS departamento, d.presupuesto, COUNT(a.id_asignatura) AS cantidad_obligatorias\nFROM departamentos d\nINNER JOIN asignaturas a ON d.id_departamento = a.id_departamento\nWHERE a.es_obligatoria = 1\n  AND d.presupuesto > (SELECT AVG(presupuesto) FROM departamentos)\nGROUP BY d.id_departamento, d.nombre, d.presupuesto\nHAVING COUNT(a.id_asignatura) > 5;",
+    "explanation": "`AVG(d.presupuesto)` en el WHERE es inválido (error 1111) y además, aunque se pudiera, calcularía el promedio del grupo, no el general. El promedio general sale de una **subconsulta escalar**: `(SELECT AVG(presupuesto) FROM departamentos)`.",
+    "hints": [
+      "¿El promedio general es un agregado del grupo o de toda la tabla?",
+      "Ejecutala primero y mirá si da error o un resultado raro."
+    ],
+    "concepts": [
+      "subconsulta escalar"
+    ],
+    "check": {
+      "type": "result",
+      "orderMatters": false
+    }
+  }
+]

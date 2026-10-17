@@ -1,0 +1,910 @@
+[
+  {
+    "id": "u-tp4-02",
+    "title": "Mesas finales desde 2020",
+    "topic": "restricciones",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 2",
+    "statement": "La secretaría detectó mesas finales con fechas inválidas.\n\n**No podrán registrarse mesas finales con fechas anteriores al 1 de enero de 2020.**\n\nAgregá la restricción a `mesas_finales`.",
+    "tables": [
+      "mesas_finales"
+    ],
+    "solution": "ALTER TABLE mesas_finales\n  ADD CONSTRAINT chk_mesas_finales_fecha CHECK (fecha >= '2020-01-01');",
+    "explanation": "Un `CHECK` contra una fecha fija. MySQL compara fechas escritas como `'AAAA-MM-DD'` sin problema. \"No anteriores al 1/1/2020\" incluye ese día, por eso es `>=`.\n\nUn CHECK no puede usar funciones no deterministas como `CURDATE()`: para una regla \"no en el pasado\" haría falta un trigger.",
+    "hints": [
+      "Es un CHECK sobre la columna fecha.",
+      "¿El 1 de enero de 2020 está permitido? Elegí > o >= en consecuencia."
+    ],
+    "concepts": [
+      "CHECK",
+      "fechas"
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Insertar una mesa del 31/12/2019",
+          "sql": "INSERT INTO mesas_finales (id_asignatura, id_docente, id_aula, fecha, turno, llamado) VALUES (1, 1, 1, '2019-12-31', 'Diciembre', 1)",
+          "expect": "error"
+        },
+        {
+          "description": "Insertar una mesa del 01/01/2020",
+          "sql": "INSERT INTO mesas_finales (id_asignatura, id_docente, id_aula, fecha, turno, llamado) VALUES (1, 1, 1, '2020-01-01', 'Febrero', 1)",
+          "expect": "ok"
+        },
+        {
+          "description": "Mover una mesa existente a 2015",
+          "sql": "UPDATE mesas_finales SET fecha = '2015-07-01' WHERE id_mesa = 1",
+          "expect": "error"
+        }
+      ],
+      "verifyQueries": []
+    }
+  },
+  {
+    "id": "u-tp4-03",
+    "title": "Capacidad positiva de aulas",
+    "topic": "restricciones",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 3",
+    "statement": "**Toda aula registrada deberá tener una capacidad válida y positiva.**\n\nAgregá la restricción a `aulas`.",
+    "tables": [
+      "aulas"
+    ],
+    "solution": "ALTER TABLE aulas\n  ADD CONSTRAINT chk_aulas_capacidad CHECK (capacidad > 0);",
+    "explanation": "\"Positiva\" significa **mayor que cero**: un aula con capacidad 0 no tiene sentido, así que es `> 0` y no `>= 0`.",
+    "hints": [
+      "¿El 0 es positivo?"
+    ],
+    "concepts": [
+      "CHECK"
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Insertar un aula con capacidad 0",
+          "sql": "INSERT INTO aulas (nombre, capacidad, tipo) VALUES ('Aula X', 0, 'normal')",
+          "expect": "error"
+        },
+        {
+          "description": "Insertar un aula con capacidad -10",
+          "sql": "INSERT INTO aulas (nombre, capacidad, tipo) VALUES ('Aula X', -10, 'normal')",
+          "expect": "error"
+        },
+        {
+          "description": "Insertar un aula con capacidad 1",
+          "sql": "INSERT INTO aulas (nombre, capacidad, tipo) VALUES ('Aula X', 1, 'normal')",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": []
+    }
+  },
+  {
+    "id": "u-tp4-04",
+    "title": "Cupo mayor a cero",
+    "topic": "restricciones",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 4",
+    "statement": "**Toda comisión deberá poseer un cupo mayor que cero.**",
+    "tables": [
+      "comisiones"
+    ],
+    "solution": "ALTER TABLE comisiones\n  ADD CONSTRAINT chk_comisiones_cupo CHECK (cupo > 0);",
+    "explanation": "Mismo patrón que el ejercicio anterior: `CHECK` con mayor estricto.",
+    "hints": [
+      "Mayor que cero: > 0."
+    ],
+    "concepts": [
+      "CHECK"
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Actualizar el cupo de una comisión a 0",
+          "sql": "UPDATE comisiones SET cupo = 0 WHERE id_comision = 1",
+          "expect": "error"
+        },
+        {
+          "description": "Actualizar el cupo de una comisión a 1",
+          "sql": "UPDATE comisiones SET cupo = 1 WHERE id_comision = 1",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": []
+    }
+  },
+  {
+    "id": "u-tp4-05",
+    "title": "Salario no negativo",
+    "topic": "restricciones",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 5",
+    "statement": "**Nunca podrá registrarse un salario negativo para un docente.**",
+    "tables": [
+      "docentes"
+    ],
+    "solution": "ALTER TABLE docentes\n  ADD CONSTRAINT chk_docentes_salario_base CHECK (salario_base >= 0);",
+    "explanation": "La diferencia con los anteriores es importante: **\"no negativo\" permite el cero**, por eso se usa `>=` y no `>`. Es un detalle típico de examen.",
+    "hints": [
+      "¿Un salario de 0 es negativo?"
+    ],
+    "concepts": [
+      "CHECK",
+      "> vs >="
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Poner un salario de -1",
+          "sql": "UPDATE docentes SET salario_base = -1 WHERE id_docente = 1",
+          "expect": "error"
+        },
+        {
+          "description": "Poner un salario de 0",
+          "sql": "UPDATE docentes SET salario_base = 0 WHERE id_docente = 1",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": []
+    }
+  },
+  {
+    "id": "u-tp4-06",
+    "title": "DNI y email únicos",
+    "topic": "restricciones",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 6 y 7",
+    "statement": "Corresponde a los ejercicios 6 y 7 del TP4:\n\n- **No deben existir dos alumnos con el mismo DNI.**\n- **Cada docente deberá poseer un email único.**\n\nEn esta base **ya existen** índices UNIQUE sin nombre descriptivo (`dni` en `alumnos` y `email` en `docentes`, mirá la pestaña de tablas). Reemplazalos por restricciones con nombre: **`uq_alumnos_dni`** y **`uq_docentes_email`**.",
+    "tables": [
+      "alumnos",
+      "docentes"
+    ],
+    "solution": "ALTER TABLE alumnos DROP INDEX dni;\nALTER TABLE alumnos ADD CONSTRAINT uq_alumnos_dni UNIQUE (dni);\n\nALTER TABLE docentes DROP INDEX email;\nALTER TABLE docentes ADD CONSTRAINT uq_docentes_email UNIQUE (email);",
+    "explanation": "Para impedir valores repetidos se usa `UNIQUE`, **no** `CHECK` (un CHECK solo mira la fila actual, no puede comparar contra otras filas).\n\nEn MySQL un UNIQUE se implementa con un índice, por eso se borra con `DROP INDEX nombre`. Si agregaras el nuevo sin borrar el viejo, tendrías dos índices únicos redundantes sobre la misma columna.\n\nDiferencia con PRIMARY KEY: una tabla tiene una sola PK y no admite NULL; puede tener varios UNIQUE y un UNIQUE sí admite varios NULL.",
+    "hints": [
+      "¿CHECK o UNIQUE? ¿Cuál puede comparar contra otras filas?",
+      "Los UNIQUE existentes se borran con ALTER TABLE ... DROP INDEX nombre.",
+      "Agregá los nuevos con ADD CONSTRAINT nombre UNIQUE (columna)."
+    ],
+    "concepts": [
+      "UNIQUE",
+      "DROP INDEX",
+      "UNIQUE vs PRIMARY KEY"
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Insertar un alumno con un DNI repetido",
+          "sql": "INSERT INTO alumnos (nombre, apellido, dni) SELECT 'Prueba', 'Duplicado', dni FROM alumnos WHERE id_alumno = 1",
+          "expect": "error"
+        },
+        {
+          "description": "Cambiar el email de un docente por el de otro",
+          "sql": "UPDATE docentes SET email = (SELECT x.email FROM (SELECT email FROM docentes WHERE id_docente = 2) x) WHERE id_docente = 1",
+          "expect": "error"
+        },
+        {
+          "description": "Insertar un alumno con DNI nuevo",
+          "sql": "INSERT INTO alumnos (nombre, apellido, dni) VALUES ('Prueba', 'Nueva', '99999999')",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": [
+        "SELECT TABLE_NAME, CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND CONSTRAINT_TYPE = 'UNIQUE' AND TABLE_NAME IN ('alumnos', 'docentes')"
+      ]
+    }
+  },
+  {
+    "id": "u-tp4-08",
+    "title": "No borrar departamentos con docentes",
+    "topic": "restricciones",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 8",
+    "statement": "**Si un departamento posee docentes asociados, la eliminación deberá rechazarse automáticamente.**\n\nLa tabla `docentes` ya tiene una FK hacia `departamentos` llamada **`docentes_ibfk_1`**, sin acción explícita. Reemplazala por una FK llamada **`fk_docentes_departamentos`** con `ON DELETE RESTRICT`.",
+    "tables": [
+      "docentes",
+      "departamentos"
+    ],
+    "solution": "ALTER TABLE docentes DROP FOREIGN KEY docentes_ibfk_1;\n\nALTER TABLE docentes\n  ADD CONSTRAINT fk_docentes_departamentos\n  FOREIGN KEY (id_departamento) REFERENCES departamentos (id_departamento)\n  ON DELETE RESTRICT;",
+    "explanation": "La FK va en la tabla **hija** (`docentes`) apuntando a la **padre** (`departamentos`). `ON DELETE RESTRICT` rechaza el borrado del padre mientras tenga hijos.\n\nDato de examen: en InnoDB, si no se indica ninguna acción, el comportamiento por defecto es `NO ACTION`, que en MySQL equivale a `RESTRICT`. Por eso la FK original ya impedía el borrado; acá se la reemplaza para que la regla quede explícita y con nombre.\n\nUna FK se borra con `DROP FOREIGN KEY nombre` (no con DROP CONSTRAINT en versiones viejas).",
+    "hints": [
+      "La FK se define en la tabla hija.",
+      "Primero borrá la FK existente con DROP FOREIGN KEY.",
+      "Después agregá la nueva con ON DELETE RESTRICT."
+    ],
+    "concepts": [
+      "FOREIGN KEY",
+      "ON DELETE RESTRICT",
+      "DROP FOREIGN KEY"
+    ],
+    "requirements": [
+      {
+        "pattern": "ON\\s+DELETE\\s+RESTRICT",
+        "message": "Indicá la acción explícitamente con ON DELETE RESTRICT."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Borrar un departamento con docentes",
+          "sql": "DELETE FROM departamentos WHERE id_departamento = 1",
+          "expect": "error"
+        },
+        {
+          "description": "Borrar un departamento sin docentes",
+          "sql": "INSERT INTO departamentos (id_departamento, nombre) VALUES (99, 'Prueba');\nDELETE FROM departamentos WHERE id_departamento = 99",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": [
+        "SELECT CONSTRAINT_NAME, DELETE_RULE FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'docentes' AND REFERENCED_TABLE_NAME = 'departamentos'"
+      ]
+    }
+  },
+  {
+    "id": "u-tp4-09",
+    "title": "Correlatividades en cascada",
+    "topic": "restricciones",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 9",
+    "statement": "**Al eliminar una asignatura, sus correlatividades asociadas deberán eliminarse automáticamente.**\n\nReemplazá la FK `correlatividades_ibfk_1` (de `correlatividades.id_asignatura` hacia `asignaturas`) por una llamada **`fk_correlatividades_asignaturas`** con la acción correspondiente.",
+    "tables": [
+      "correlatividades",
+      "asignaturas"
+    ],
+    "solution": "ALTER TABLE correlatividades DROP FOREIGN KEY correlatividades_ibfk_1;\n\nALTER TABLE correlatividades\n  ADD CONSTRAINT fk_correlatividades_asignaturas\n  FOREIGN KEY (id_asignatura) REFERENCES asignaturas (id_asignatura)\n  ON DELETE CASCADE;",
+    "explanation": "\"Se eliminan automáticamente los hijos cuando se borra el padre\" es `ON DELETE CASCADE`. Se usa cuando el hijo no tiene sentido sin el padre.\n\n⚠ Si solo agregás la FK nueva sin borrar `correlatividades_ibfk_1`, la FK vieja (RESTRICT) sigue activa y el borrado igual falla: **las dos FK se evalúan**. Este paso falta en muchas resoluciones del TP.\n\nOjo: `correlatividades` tiene otra FK (`id_asignatura_correlativa`) que también apunta a `asignaturas`; esa sigue con RESTRICT.",
+    "hints": [
+      "¿Qué acción borra los hijos automáticamente?",
+      "Si la FK vieja sigue existiendo, ¿qué pasa al borrar?"
+    ],
+    "concepts": [
+      "ON DELETE CASCADE",
+      "DROP FOREIGN KEY"
+    ],
+    "check": {
+      "type": "state",
+      "probes": [],
+      "verifyQueries": [
+        "INSERT INTO asignaturas (id_asignatura, nombre) VALUES (9001, 'Asignatura de prueba');\nINSERT INTO correlatividades (id_asignatura, id_asignatura_correlativa) VALUES (9001, 1), (9001, 2);\nDELETE FROM asignaturas WHERE id_asignatura = 9001;\nSELECT COUNT(*) AS correlatividades_huerfanas FROM correlatividades WHERE id_asignatura = 9001",
+        "SELECT CONSTRAINT_NAME, DELETE_RULE FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'correlatividades' AND REFERENCED_TABLE_NAME = 'asignaturas'"
+      ]
+    }
+  },
+  {
+    "id": "u-tp4-10",
+    "title": "Conservar comisiones sin aula",
+    "topic": "restricciones",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 10",
+    "statement": "**Si un aula es eliminada, las comisiones asociadas deberán conservarse, pero perdiendo la referencia al aula eliminada.**\n\nReemplazá la FK `comisiones_ibfk_3` (de `comisiones.id_aula` hacia `aulas`) por una llamada **`fk_comisiones_aulas`** con la acción correspondiente.",
+    "tables": [
+      "comisiones",
+      "aulas"
+    ],
+    "solution": "ALTER TABLE comisiones DROP FOREIGN KEY comisiones_ibfk_3;\nALTER TABLE comisiones MODIFY id_aula INT NULL;\n\nALTER TABLE comisiones\n  ADD CONSTRAINT fk_comisiones_aulas\n  FOREIGN KEY (id_aula) REFERENCES aulas (id_aula)\n  ON DELETE SET NULL;",
+    "explanation": "\"Se conserva el hijo pero pierde la referencia\" es `ON DELETE SET NULL`. Para eso la columna **tiene que admitir NULL**: `id_aula` es `NOT NULL`, así que hay que cambiarla con `MODIFY id_aula INT NULL`. Si no, MySQL rechaza la FK (error 1830).\n\nComo en el ejercicio 9, hay que borrar la FK vieja; si no, su RESTRICT sigue bloqueando el borrado del aula.\n\nResumen de las tres acciones: **RESTRICT** protege al padre, **CASCADE** borra a los hijos, **SET NULL** conserva a los hijos sin referencia.",
+    "hints": [
+      "¿Qué acción conserva el hijo y pone la referencia en NULL?",
+      "¿La columna id_aula admite NULL hoy?",
+      "No te olvides de la FK vieja."
+    ],
+    "concepts": [
+      "ON DELETE SET NULL",
+      "MODIFY",
+      "NULL en FK"
+    ],
+    "check": {
+      "type": "state",
+      "probes": [],
+      "verifyQueries": [
+        "INSERT INTO aulas (id_aula, nombre, capacidad, tipo) VALUES (99, 'Aula de prueba', 30, 'normal');\nUPDATE comisiones SET id_aula = 99 WHERE id_comision IN (1, 2);\nDELETE FROM aulas WHERE id_aula = 99;\nSELECT id_comision, id_aula FROM comisiones WHERE id_comision IN (1, 2)",
+        "SELECT CONSTRAINT_NAME, DELETE_RULE FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'comisiones' AND REFERENCED_TABLE_NAME = 'aulas'"
+      ]
+    }
+  },
+  {
+    "id": "u-tp4-12",
+    "title": "Evitar inscripción duplicada",
+    "topic": "triggers",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 12",
+    "statement": "**Un alumno no podrá estar inscripto más de una vez en la misma comisión.** Resolvelo con un **trigger** sobre `inscripcion_alumno_comision` que rechace la operación con `SIGNAL`.",
+    "tables": [
+      "inscripcion_alumno_comision"
+    ],
+    "starterSql": "DELIMITER $$\n\n-- tu código acá\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE TRIGGER trg_validar_inscripcion_duplicada\nBEFORE INSERT ON inscripcion_alumno_comision\nFOR EACH ROW\nBEGIN\n  IF EXISTS (\n    SELECT 1\n    FROM inscripcion_alumno_comision\n    WHERE id_alumno = NEW.id_alumno\n      AND id_comision = NEW.id_comision\n  ) THEN\n    SIGNAL SQLSTATE '45000'\n      SET MESSAGE_TEXT = 'El alumno ya esta inscripto en esta comision';\n  END IF;\nEND $$\n\nDELIMITER ;",
+    "explanation": "`BEFORE INSERT` + `IF EXISTS (...)` + `SIGNAL SQLSTATE '45000'`: el patrón básico de validación con trigger. `SIGNAL` corta la operación con un error propio.\n\nPara pensar: esta tabla **ya tiene** un `UNIQUE (id_alumno, id_comision)`, que resuelve lo mismo de forma declarativa, más eficiente y sin código. En un examen conviene decirlo: cuando una regla se puede expresar con una restricción, la restricción es mejor que un trigger.",
+    "hints": [
+      "Tiene que ejecutarse antes de guardar la fila: BEFORE INSERT.",
+      "Buscá si ya existe una fila con el mismo alumno y comisión (EXISTS).",
+      "Rechazá con SIGNAL SQLSTATE '45000'."
+    ],
+    "concepts": [
+      "TRIGGER",
+      "SIGNAL",
+      "EXISTS"
+    ],
+    "requirements": [
+      {
+        "pattern": "CREATE\\s+TRIGGER",
+        "message": "Resolvelo con un trigger."
+      },
+      {
+        "pattern": "\\bSIGNAL\\b",
+        "message": "Rechazá la operación con SIGNAL."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Inscribir a un alumno que ya está en la comisión",
+          "sql": "INSERT INTO inscripcion_alumno_comision (id_alumno, id_comision, fecha_inscripcion, estado) VALUES (124, 1, CURDATE(), 'Cursa')",
+          "expect": "error"
+        },
+        {
+          "description": "Inscribir a un alumno nuevo",
+          "sql": "INSERT INTO inscripcion_alumno_comision (id_alumno, id_comision, fecha_inscripcion, estado) VALUES (1, 1, CURDATE(), 'Cursa')",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": [
+        "SELECT EVENT_OBJECT_TABLE, ACTION_TIMING, EVENT_MANIPULATION FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE()"
+      ]
+    }
+  },
+  {
+    "id": "u-tp4-13",
+    "title": "Validar cupo disponible",
+    "topic": "triggers",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 13",
+    "statement": "**Antes de registrar una inscripción, deberá verificarse que la comisión todavía tenga cupo disponible.** Considerá como ocupados **todos** los registros de inscripción de esa comisión.",
+    "tables": [
+      "inscripcion_alumno_comision",
+      "comisiones"
+    ],
+    "starterSql": "DELIMITER $$\n\n-- tu código acá\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE TRIGGER trg_validar_cupo\nBEFORE INSERT ON inscripcion_alumno_comision\nFOR EACH ROW\nBEGIN\n  IF (SELECT COUNT(*)\n        FROM inscripcion_alumno_comision\n       WHERE id_comision = NEW.id_comision)\n     >=\n     (SELECT cupo\n        FROM comisiones\n       WHERE id_comision = NEW.id_comision) THEN\n    SIGNAL SQLSTATE '45000'\n      SET MESSAGE_TEXT = 'La comision no tiene cupo disponible';\n  END IF;\nEND $$\n\nDELIMITER ;",
+    "explanation": "Se comparan dos subconsultas escalares: inscriptos actuales vs. cupo. Si ya se alcanzó el cupo (`>=`), se rechaza. Este tipo de regla **no se puede** expresar con un CHECK, porque depende de otras filas y de otra tabla: es el caso típico para un trigger.\n\nComo es BEFORE INSERT, la fila nueva todavía no está contada: con cupo 35 y 34 inscriptos, se acepta la número 35; con 35, se rechaza la 36.",
+    "hints": [
+      "Necesitás dos valores: cuántos hay inscriptos y cuál es el cupo.",
+      "Si inscriptos >= cupo, SIGNAL."
+    ],
+    "concepts": [
+      "TRIGGER",
+      "subconsulta escalar",
+      "SIGNAL"
+    ],
+    "requirements": [
+      {
+        "pattern": "CREATE\\s+TRIGGER",
+        "message": "Resolvelo con un trigger."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Inscribir en una comisión llena (1163)",
+          "sql": "INSERT INTO inscripcion_alumno_comision (id_alumno, id_comision, fecha_inscripcion, estado) VALUES (1, 1163, CURDATE(), 'Cursa')",
+          "expect": "error"
+        },
+        {
+          "description": "Inscribir en una comisión con lugar (1)",
+          "sql": "INSERT INTO inscripcion_alumno_comision (id_alumno, id_comision, fecha_inscripcion, estado) VALUES (1, 1, CURDATE(), 'Cursa')",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": []
+    }
+  },
+  {
+    "id": "u-tp4-14",
+    "title": "Asistencia solo de inscriptos",
+    "topic": "triggers",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 14",
+    "statement": "**Solo podrá registrarse asistencia para alumnos inscriptos en la comisión correspondiente.**",
+    "tables": [
+      "asistencias",
+      "inscripcion_alumno_comision"
+    ],
+    "starterSql": "DELIMITER $$\n\n-- tu código acá\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE TRIGGER trg_validar_asistencia\nBEFORE INSERT ON asistencias\nFOR EACH ROW\nBEGIN\n  IF NOT EXISTS (\n    SELECT 1\n    FROM inscripcion_alumno_comision\n    WHERE id_alumno = NEW.id_alumno\n      AND id_comision = NEW.id_comision\n  ) THEN\n    SIGNAL SQLSTATE '45000'\n      SET MESSAGE_TEXT = 'El alumno no pertenece a la comision';\n  END IF;\nEND $$\n\nDELIMITER ;",
+    "explanation": "Lógica inversa al ejercicio 12: se rechaza si **NO EXISTE** la inscripción. Las FK de `asistencias` solo garantizan que el alumno y la comisión existan por separado, no que estén relacionados entre sí.",
+    "hints": [
+      "El trigger va sobre asistencias.",
+      "¿Existe la inscripción de ese alumno en esa comisión? Si no, SIGNAL."
+    ],
+    "concepts": [
+      "TRIGGER",
+      "NOT EXISTS"
+    ],
+    "requirements": [
+      {
+        "pattern": "CREATE\\s+TRIGGER",
+        "message": "Resolvelo con un trigger."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Registrar asistencia de un alumno no inscripto",
+          "sql": "INSERT INTO asistencias (id_alumno, id_comision, fecha, presente) VALUES (1, 1, CURDATE(), 1)",
+          "expect": "error"
+        },
+        {
+          "description": "Registrar asistencia de un alumno inscripto",
+          "sql": "INSERT INTO asistencias (id_alumno, id_comision, fecha, presente) VALUES (124, 1, CURDATE(), 1)",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": []
+    }
+  },
+  {
+    "id": "u-tp4-15",
+    "title": "Exámenes solo desde 2020",
+    "topic": "triggers",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 15",
+    "statement": "**No podrán registrarse exámenes asociados a comisiones anteriores al año 2020.**",
+    "tables": [
+      "examenes",
+      "comisiones"
+    ],
+    "starterSql": "DELIMITER $$\n\n-- tu código acá\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE TRIGGER trg_validar_anio_comision\nBEFORE INSERT ON examenes\nFOR EACH ROW\nBEGIN\n  IF EXISTS (\n    SELECT 1\n    FROM comisiones\n    WHERE id_comision = NEW.id_comision\n      AND anio < 2020\n  ) THEN\n    SIGNAL SQLSTATE '45000'\n      SET MESSAGE_TEXT = 'No se permiten examenes sobre comisiones anteriores a 2020';\n  END IF;\nEND $$\n\nDELIMITER ;",
+    "explanation": "El trigger va sobre `examenes` (donde ocurre el INSERT), pero el dato a validar (el año) está en **otra tabla**. Por eso no alcanza con un CHECK: un CHECK no puede consultar otras tablas.",
+    "hints": [
+      "El INSERT es en examenes, pero el año está en comisiones.",
+      "Buscá la comisión del examen y mirá su año."
+    ],
+    "concepts": [
+      "TRIGGER",
+      "validación entre tablas"
+    ],
+    "requirements": [
+      {
+        "pattern": "CREATE\\s+TRIGGER",
+        "message": "Resolvelo con un trigger."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Examen sobre una comisión de 2019",
+          "sql": "INSERT INTO comisiones (id_comision, id_asignatura, id_docente, id_aula, anio, cuatrimestre, cupo, tipo) VALUES (9001, 1, 1, 1, 2019, 1, 30, 'teorica');\nINSERT INTO examenes (id_comision, fecha, tipo) VALUES (9001, '2019-06-01', 'parcial')",
+          "expect": "error"
+        },
+        {
+          "description": "Examen sobre una comisión de 2025",
+          "sql": "INSERT INTO examenes (id_comision, fecha, tipo) VALUES (1, '2025-06-01', 'parcial')",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": []
+    }
+  },
+  {
+    "id": "u-tp4-16",
+    "title": "Auditoría de cambios salariales",
+    "topic": "triggers",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 16",
+    "statement": "Cada vez que se modifique el **salario base** de un docente, debe registrarse automáticamente: docente, salario anterior, salario nuevo y fecha del cambio.\n\nCreá la tabla **`auditoria_salarios_docentes`** con estas columnas (se verifican por nombre):\n\n| columna | tipo |\n|---|---|\n| `id_auditoria` | INT AUTO_INCREMENT PRIMARY KEY |\n| `id_docente` | INT |\n| `salario_anterior` | DECIMAL(10,2) |\n| `salario_nuevo` | DECIMAL(10,2) |\n| `fecha_cambio` | DATETIME |\n\ny el trigger que la complete. Si se actualiza otra columna y el salario no cambia, **no** debe registrarse nada.",
+    "tables": [
+      "docentes"
+    ],
+    "solution": "CREATE TABLE auditoria_salarios_docentes (\n  id_auditoria     INT AUTO_INCREMENT PRIMARY KEY,\n  id_docente       INT,\n  salario_anterior DECIMAL(10,2),\n  salario_nuevo    DECIMAL(10,2),\n  fecha_cambio     DATETIME\n);\n\nDELIMITER $$\n\nCREATE TRIGGER trg_auditar_cambio_salario\nAFTER UPDATE ON docentes\nFOR EACH ROW\nBEGIN\n  IF OLD.salario_base <> NEW.salario_base THEN\n    INSERT INTO auditoria_salarios_docentes (id_docente, salario_anterior, salario_nuevo, fecha_cambio)\n    VALUES (OLD.id_docente, OLD.salario_base, NEW.salario_base, NOW());\n  END IF;\nEND $$\n\nDELIMITER ;",
+    "explanation": "- **AFTER UPDATE**: se reacciona a un cambio que ya ocurrió; no hace falta impedir nada.\n- `OLD` tiene los valores anteriores y `NEW` los nuevos. Compararlos evita registrar actualizaciones que no tocan el salario.\n- Detalle fino: si alguno de los dos salarios fuera NULL, `<>` da UNKNOWN y no se registraría. La comparación segura con NULL es `NOT (OLD.salario_base <=> NEW.salario_base)`.",
+    "hints": [
+      "Primero creá la tabla de auditoría.",
+      "¿BEFORE o AFTER? No hay que modificar la fila ni impedir nada.",
+      "Compará OLD.salario_base con NEW.salario_base antes de insertar."
+    ],
+    "concepts": [
+      "TRIGGER AFTER UPDATE",
+      "OLD y NEW",
+      "auditoría"
+    ],
+    "requirements": [
+      {
+        "pattern": "CREATE\\s+TRIGGER",
+        "message": "Resolvelo con un trigger."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [],
+      "verifyQueries": [
+        "UPDATE docentes SET salario_base = 500000 WHERE id_docente = 1;\nUPDATE docentes SET email = 'nuevo@mail.com' WHERE id_docente = 2;\nUPDATE docentes SET salario_base = salario_base WHERE id_docente = 3;\nSELECT id_docente, salario_anterior, salario_nuevo, DATE(fecha_cambio) = CURDATE() AS registrado_hoy FROM auditoria_salarios_docentes"
+      ]
+    }
+  },
+  {
+    "id": "u-tp4-17",
+    "title": "Auditoría de comisiones eliminadas",
+    "topic": "triggers",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 17",
+    "statement": "Cada vez que se **elimine una comisión** debe guardarse: id de comisión, asignatura, docente y fecha de eliminación.\n\nCreá la tabla **`auditoria_comisiones_eliminadas`** con las columnas `id_auditoria` (INT AUTO_INCREMENT PK), `id_comision` INT, `id_asignatura` INT, `id_docente` INT y `fecha_eliminacion` DATETIME, y el trigger correspondiente.",
+    "tables": [
+      "comisiones"
+    ],
+    "solution": "CREATE TABLE auditoria_comisiones_eliminadas (\n  id_auditoria      INT AUTO_INCREMENT PRIMARY KEY,\n  id_comision       INT,\n  id_asignatura     INT,\n  id_docente        INT,\n  fecha_eliminacion DATETIME\n);\n\nDELIMITER $$\n\nCREATE TRIGGER trg_auditar_eliminacion_comision\nAFTER DELETE ON comisiones\nFOR EACH ROW\nBEGIN\n  INSERT INTO auditoria_comisiones_eliminadas (id_comision, id_asignatura, id_docente, fecha_eliminacion)\n  VALUES (OLD.id_comision, OLD.id_asignatura, OLD.id_docente, NOW());\nEND $$\n\nDELIMITER ;",
+    "explanation": "En un DELETE **no existe `NEW`** (la fila desaparece): solo se puede leer `OLD`. Es `AFTER DELETE` porque se registra algo que ya pasó.\n\nSi el borrado falla (por ejemplo, por una FK de inscripciones), el trigger AFTER no llega a ejecutarse y no queda auditoría de algo que no ocurrió.",
+    "hints": [
+      "En un DELETE, ¿tenés NEW u OLD?",
+      "AFTER DELETE ON comisiones."
+    ],
+    "concepts": [
+      "TRIGGER AFTER DELETE",
+      "OLD"
+    ],
+    "requirements": [
+      {
+        "pattern": "CREATE\\s+TRIGGER",
+        "message": "Resolvelo con un trigger."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [],
+      "verifyQueries": [
+        "INSERT INTO comisiones (id_comision, id_asignatura, id_docente, id_aula, anio, cuatrimestre, cupo, tipo) VALUES (9001, 3, 5, 2, 2026, 1, 40, 'teorica'), (9002, 4, 6, 2, 2026, 2, 30, 'practica');\nDELETE FROM comisiones WHERE id_comision IN (9001, 9002);\nSELECT id_comision, id_asignatura, id_docente, DATE(fecha_eliminacion) = CURDATE() AS registrado_hoy FROM auditoria_comisiones_eliminadas"
+      ]
+    }
+  },
+  {
+    "id": "u-tp4-18",
+    "title": "Fecha de última actualización",
+    "topic": "triggers",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 18",
+    "statement": "Cada vez que se actualice un alumno, debe registrarse automáticamente la fecha y hora actual en un campo de última actualización.\n\nAgregá a `alumnos` la columna **`fecha_ultima_actualizacion`** (DATETIME) y el trigger correspondiente.",
+    "tables": [
+      "alumnos"
+    ],
+    "solution": "ALTER TABLE alumnos ADD fecha_ultima_actualizacion DATETIME;\n\nDELIMITER $$\n\nCREATE TRIGGER trg_actualizar_fecha_alumno\nBEFORE UPDATE ON alumnos\nFOR EACH ROW\nBEGIN\n  SET NEW.fecha_ultima_actualizacion = NOW();\nEND $$\n\nDELIMITER ;",
+    "explanation": "Acá \"crear la estructura\" es **agregar una columna**, no una tabla. El trigger es **BEFORE UPDATE** porque modifica la fila que se está guardando con `SET NEW.columna`. En un AFTER, `NEW` ya no se puede modificar, y hacer `UPDATE alumnos` desde un trigger de la misma tabla da error 1442.\n\nAlternativa sin trigger: `ADD fecha_ultima_actualizacion DATETIME ON UPDATE CURRENT_TIMESTAMP`.",
+    "hints": [
+      "Primero ALTER TABLE ... ADD la columna.",
+      "Para cambiar un valor de la fila que se guarda: BEFORE + SET NEW.columna."
+    ],
+    "concepts": [
+      "TRIGGER BEFORE UPDATE",
+      "SET NEW",
+      "ALTER TABLE ADD"
+    ],
+    "requirements": [
+      {
+        "pattern": "CREATE\\s+TRIGGER",
+        "message": "Resolvelo con un trigger."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [],
+      "verifyQueries": [
+        "UPDATE alumnos SET telefono = '351-0000000' WHERE id_alumno = 1;\nSELECT id_alumno, DATE(fecha_ultima_actualizacion) = CURDATE() AS actualizado_hoy FROM alumnos WHERE id_alumno IN (1, 2)"
+      ]
+    }
+  },
+  {
+    "id": "u-tp4-19",
+    "title": "Contador automático de inscriptos",
+    "topic": "triggers",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 19",
+    "statement": "Cada vez que un alumno se inscriba a una comisión, la cantidad de inscriptos debe actualizarse automáticamente en la comisión.\n\nAgregá a `comisiones` la columna **`cantidad_inscriptos`** INT con **valor inicial 0** (como en la resolución del TP) y el trigger que la incremente.",
+    "tables": [
+      "comisiones",
+      "inscripcion_alumno_comision"
+    ],
+    "solution": "ALTER TABLE comisiones ADD cantidad_inscriptos INT DEFAULT 0;\n\nDELIMITER $$\n\nCREATE TRIGGER trg_actualizar_cantidad_inscriptos\nAFTER INSERT ON inscripcion_alumno_comision\nFOR EACH ROW\nBEGIN\n  UPDATE comisiones\n  SET cantidad_inscriptos = cantidad_inscriptos + 1\n  WHERE id_comision = NEW.id_comision;\nEND $$\n\nDELIMITER ;",
+    "explanation": "El trigger está en **una tabla** (`inscripcion_alumno_comision`) y modifica **otra** (`comisiones`): eso sí está permitido. Es `AFTER INSERT` porque se cuenta una inscripción que ya se guardó.\n\nPara mejorar (fuera de lo que pide el TP):\n\n- Con `DEFAULT 0` las comisiones existentes arrancan en 0 aunque ya tengan inscriptos. Se puede inicializar con `UPDATE comisiones c SET cantidad_inscriptos = (SELECT COUNT(*) FROM inscripcion_alumno_comision i WHERE i.id_comision = c.id_comision);`.\n- También haría falta un trigger `AFTER DELETE` que reste.\n- Guardar un dato derivado es **desnormalizar**: se gana velocidad de lectura a cambio de tener que mantenerlo consistente.",
+    "hints": [
+      "Agregá la columna con DEFAULT 0.",
+      "El trigger va sobre la tabla de inscripciones, AFTER INSERT.",
+      "Actualizá la comisión NEW.id_comision sumando 1."
+    ],
+    "concepts": [
+      "TRIGGER AFTER INSERT",
+      "datos derivados",
+      "desnormalización"
+    ],
+    "requirements": [
+      {
+        "pattern": "CREATE\\s+TRIGGER",
+        "message": "Resolvelo con un trigger."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [],
+      "verifyQueries": [
+        "INSERT INTO inscripcion_alumno_comision (id_alumno, id_comision, fecha_inscripcion, estado) VALUES (1, 1, CURDATE(), 'Cursa'), (2, 1, CURDATE(), 'Cursa'), (1, 2, CURDATE(), 'Cursa');\nSELECT id_comision, cantidad_inscriptos FROM comisiones WHERE id_comision IN (1, 2, 3)"
+      ]
+    }
+  },
+  {
+    "id": "u-tp4-20",
+    "title": "Procedimiento para inscribir",
+    "topic": "procedimientos",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 20",
+    "statement": "Creá el procedimiento **`sp_inscribir_alumno_comision(p_id_alumno, p_id_comision)`** que inscriba al alumno en la comisión con la **fecha actual** y estado **`'Cursa'`**.\n\n> La resolución del TP usa el estado `'activa'`, pero ese valor no existe en el ENUM de `inscripcion_alumno_comision` (`Cursa`, `Regular`, `Libre`, `Aprobada`, `Baja`) y MySQL lo rechaza. Por eso acá se usa `'Cursa'`.",
+    "tables": [
+      "inscripcion_alumno_comision"
+    ],
+    "starterSql": "DELIMITER $$\n\n-- tu código acá\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE PROCEDURE sp_inscribir_alumno_comision (\n  IN p_id_alumno INT,\n  IN p_id_comision INT\n)\nBEGIN\n  INSERT INTO inscripcion_alumno_comision (id_alumno, id_comision, fecha_inscripcion, estado)\n  VALUES (p_id_alumno, p_id_comision, CURDATE(), 'Cursa');\nEND $$\n\nDELIMITER ;",
+    "explanation": "Un procedimiento encapsula una operación para reutilizarla con `CALL`. Los parámetros `IN` son de entrada. `CURDATE()` da la fecha actual (DATE); `NOW()` daría fecha y hora.\n\nUsar prefijos como `p_` en los parámetros evita confundirlos con columnas del mismo nombre: si el parámetro se llamara `id_alumno`, dentro de un `WHERE id_alumno = id_alumno` MySQL tomaría el parámetro en los dos lados.",
+    "hints": [
+      "CREATE PROCEDURE nombre (IN p1 INT, IN p2 INT) BEGIN ... END",
+      "CURDATE() da la fecha de hoy."
+    ],
+    "concepts": [
+      "PROCEDURE",
+      "parámetros IN",
+      "CALL"
+    ],
+    "requirements": [
+      {
+        "pattern": "CREATE\\s+PROCEDURE",
+        "message": "Resolvelo con un procedimiento."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [],
+      "verifyQueries": [
+        "CALL sp_inscribir_alumno_comision(1, 1);\nSELECT id_alumno, id_comision, fecha_inscripcion = CURDATE() AS hoy, estado FROM inscripcion_alumno_comision WHERE id_alumno = 1 AND id_comision = 1"
+      ]
+    }
+  },
+  {
+    "id": "u-tp4-21",
+    "title": "Procedimiento para crear comisiones",
+    "topic": "procedimientos",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 21",
+    "statement": "Creá **`sp_crear_comision(p_id_asignatura, p_id_docente, p_id_aula, p_anio, p_cuatrimestre, p_cupo, p_tipo)`** que registre una nueva comisión con esos datos (en ese orden de parámetros).",
+    "tables": [
+      "comisiones"
+    ],
+    "starterSql": "DELIMITER $$\n\n-- tu código acá\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE PROCEDURE sp_crear_comision (\n  IN p_id_asignatura INT,\n  IN p_id_docente INT,\n  IN p_id_aula INT,\n  IN p_anio INT,\n  IN p_cuatrimestre INT,\n  IN p_cupo INT,\n  IN p_tipo VARCHAR(20)\n)\nBEGIN\n  INSERT INTO comisiones (id_asignatura, id_docente, id_aula, anio, cuatrimestre, cupo, tipo)\n  VALUES (p_id_asignatura, p_id_docente, p_id_aula, p_anio, p_cuatrimestre, p_cupo, p_tipo);\nEND $$\n\nDELIMITER ;",
+    "explanation": "Un parámetro por dato pedido y un único INSERT. El tipo de `p_tipo` puede ser VARCHAR: MySQL lo convierte al ENUM al insertar (y lo rechaza si el valor no es válido).",
+    "hints": [
+      "Un parámetro IN por cada columna a cargar.",
+      "Un solo INSERT con los parámetros."
+    ],
+    "concepts": [
+      "PROCEDURE",
+      "INSERT"
+    ],
+    "requirements": [
+      {
+        "pattern": "CREATE\\s+PROCEDURE",
+        "message": "Resolvelo con un procedimiento."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [],
+      "verifyQueries": [
+        "CALL sp_crear_comision(3, 5, 2, 2026, 1, 40, 'teorica');\nSELECT id_asignatura, id_docente, id_aula, anio, cuatrimestre, cupo, tipo FROM comisiones ORDER BY id_comision DESC LIMIT 1"
+      ]
+    }
+  },
+  {
+    "id": "u-tp4-23",
+    "title": "Función promedio de un alumno",
+    "topic": "procedimientos",
+    "difficulty": "intermedio",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 23",
+    "statement": "Creá la función **`fn_promedio_alumno(p_id_alumno)`** que devuelva el **promedio general de notas** del alumno. Si no tiene notas, debe devolver **0**.",
+    "tables": [
+      "notas"
+    ],
+    "starterSql": "DELIMITER $$\n\n-- tu código acá\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE FUNCTION fn_promedio_alumno (p_id_alumno INT)\nRETURNS DECIMAL(4,2)\nDETERMINISTIC\nREADS SQL DATA\nBEGIN\n  DECLARE v_promedio DECIMAL(4,2);\n\n  SELECT AVG(nota) INTO v_promedio\n  FROM notas\n  WHERE id_alumno = p_id_alumno;\n\n  RETURN IFNULL(v_promedio, 0);\nEND $$\n\nDELIMITER ;",
+    "explanation": "Se elige **FUNCTION** y no PROCEDURE porque el resultado se usa como un valor dentro de un `SELECT`.\n\n- `SELECT ... INTO variable` guarda el resultado de la consulta en una variable local declarada con `DECLARE`.\n- `AVG` sobre cero filas da **NULL**; `IFNULL(v, 0)` lo convierte en 0.\n- `READS SQL DATA` declara que la función lee datos pero no los modifica.",
+    "hints": [
+      "¿Function o procedure? El resultado se usa en un SELECT.",
+      "SELECT AVG(nota) INTO variable ...",
+      "¿Qué devuelve AVG si no hay filas?"
+    ],
+    "concepts": [
+      "FUNCTION",
+      "RETURNS",
+      "SELECT INTO",
+      "IFNULL"
+    ],
+    "requirements": [
+      {
+        "pattern": "CREATE\\s+FUNCTION",
+        "message": "Resolvelo con una función."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [],
+      "verifyQueries": [
+        "SELECT fn_promedio_alumno(69) AS a69, fn_promedio_alumno(124) AS a124, fn_promedio_alumno(999999) AS sin_notas"
+      ]
+    }
+  },
+  {
+    "id": "u-tp4-24",
+    "title": "Función alumnos activos por carrera",
+    "topic": "procedimientos",
+    "difficulty": "basico",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 24",
+    "statement": "Creá la función **`fn_cantidad_alumnos_activos_carrera(p_id_carrera)`** que devuelva la cantidad de alumnos con inscripción **activa** en esa carrera.",
+    "tables": [
+      "alumno_carrera"
+    ],
+    "starterSql": "DELIMITER $$\n\n-- tu código acá\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE FUNCTION fn_cantidad_alumnos_activos_carrera (p_id_carrera INT)\nRETURNS INT\nDETERMINISTIC\nREADS SQL DATA\nBEGIN\n  DECLARE v_cantidad INT;\n\n  SELECT COUNT(*) INTO v_cantidad\n  FROM alumno_carrera\n  WHERE id_carrera = p_id_carrera\n    AND estado = 'activa';\n\n  RETURN v_cantidad;\nEND $$\n\nDELIMITER ;",
+    "explanation": "Mismo patrón que el anterior, con `COUNT`. A diferencia de `AVG`, **`COUNT` nunca devuelve NULL**: sin filas da 0, así que el `IFNULL` no es necesario.",
+    "hints": [
+      "Contá filas de alumno_carrera con estado 'activa'.",
+      "¿COUNT puede devolver NULL?"
+    ],
+    "concepts": [
+      "FUNCTION",
+      "COUNT()"
+    ],
+    "requirements": [
+      {
+        "pattern": "CREATE\\s+FUNCTION",
+        "message": "Resolvelo con una función."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [],
+      "verifyQueries": [
+        "SELECT id_carrera, fn_cantidad_alumnos_activos_carrera(id_carrera) AS activos FROM carreras"
+      ]
+    }
+  },
+  {
+    "id": "u-tp4-26",
+    "title": "Registro integral de notas",
+    "topic": "integradores",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 26",
+    "statement": "Implementá una solución integral para registrar notas que:\n\n1. impida notas fuera de 0 a 10 (restricción **`chk_notas_rango`**),\n2. calcule `aprobado` automáticamente al insertar (≥ 4 → 1, si no 0),\n3. permita registrar con **`sp_registrar_nota(p_id_alumno, p_id_examen, p_nota)`**.\n\nReutiliza los ejercicios 1, 11 y 22 del TP4.",
+    "tables": [
+      "notas"
+    ],
+    "starterSql": "DELIMITER $$\n\n-- tu código acá\n\nDELIMITER ;\n",
+    "solution": "ALTER TABLE notas\n  ADD CONSTRAINT chk_notas_rango CHECK (nota >= 0 AND nota <= 10);\n\nDELIMITER $$\n\nCREATE TRIGGER trg_calcular_aprobado\nBEFORE INSERT ON notas\nFOR EACH ROW\nBEGIN\n  SET NEW.aprobado = (NEW.nota >= 4);\nEND $$\n\nCREATE PROCEDURE sp_registrar_nota (\n  IN p_id_alumno INT,\n  IN p_id_examen INT,\n  IN p_nota DECIMAL(4,2)\n)\nBEGIN\n  INSERT INTO notas (id_alumno, id_examen, nota)\n  VALUES (p_id_alumno, p_id_examen, p_nota);\nEND $$\n\nDELIMITER ;",
+    "explanation": "Cada objeto resuelve una parte distinta:\n\n- el **CHECK** valida el dominio del dato;\n- el **trigger** calcula un campo derivado;\n- el **procedure** ofrece una operación reutilizable.\n\nOrden de ejecución en un INSERT: primero corren los triggers BEFORE (que pueden cambiar `NEW`) y después se validan las restricciones sobre la fila final. Por eso, si un trigger \"arreglara\" una nota inválida, el CHECK ya no la rechazaría.",
+    "hints": [
+      "Es la suma de tres ejercicios anteriores.",
+      "Podés escribir trigger y procedure dentro del mismo bloque DELIMITER."
+    ],
+    "concepts": [
+      "CHECK",
+      "TRIGGER",
+      "PROCEDURE",
+      "integrador"
+    ],
+    "check": {
+      "type": "state",
+      "probes": [
+        {
+          "description": "Registrar una nota de 11",
+          "sql": "CALL sp_registrar_nota(477, 1, 11)",
+          "expect": "error"
+        },
+        {
+          "description": "Registrar una nota de 3.5",
+          "sql": "CALL sp_registrar_nota(477, 1, 3.5)",
+          "expect": "ok"
+        }
+      ],
+      "verifyQueries": [
+        "CALL sp_registrar_nota(477, 1, 3.99);\nCALL sp_registrar_nota(199, 1, 4);\nSELECT id_alumno, nota, aprobado FROM notas WHERE id_examen = 1 AND id_alumno IN (477, 199)"
+      ]
+    }
+  },
+  {
+    "id": "u-tp4-30",
+    "title": "Clasificación de demanda por carrera",
+    "topic": "procedimientos",
+    "difficulty": "avanzado",
+    "dataset": "universidad",
+    "mode": "sandbox",
+    "source": "TP4 Ej. 30",
+    "statement": "Creá **`fn_cantidad_alumnos_activos_carrera`** (ejercicio 24) y una segunda función **`fn_clasificar_demanda_carrera(p_id_carrera)`** que **la reutilice** y devuelva:\n\n- `'baja demanda'` si hay menos de 20 activos,\n- `'demanda media'` entre 20 y 70 (inclusive),\n- `'alta demanda'` si hay más de 70.",
+    "tables": [
+      "carreras",
+      "alumno_carrera"
+    ],
+    "starterSql": "DELIMITER $$\n\n-- tu código acá\n\nDELIMITER ;\n",
+    "solution": "DELIMITER $$\n\nCREATE FUNCTION fn_cantidad_alumnos_activos_carrera (p_id_carrera INT)\nRETURNS INT\nDETERMINISTIC\nREADS SQL DATA\nBEGIN\n  DECLARE v_cantidad INT;\n  SELECT COUNT(*) INTO v_cantidad\n  FROM alumno_carrera\n  WHERE id_carrera = p_id_carrera AND estado = 'activa';\n  RETURN v_cantidad;\nEND $$\n\nCREATE FUNCTION fn_clasificar_demanda_carrera (p_id_carrera INT)\nRETURNS VARCHAR(20)\nDETERMINISTIC\nREADS SQL DATA\nBEGIN\n  DECLARE v_cantidad INT;\n  SET v_cantidad = fn_cantidad_alumnos_activos_carrera(p_id_carrera);\n\n  IF v_cantidad < 20 THEN\n    RETURN 'baja demanda';\n  ELSEIF v_cantidad <= 70 THEN\n    RETURN 'demanda media';\n  ELSE\n    RETURN 'alta demanda';\n  END IF;\nEND $$\n\nDELIMITER ;",
+    "explanation": "Una función puede llamar a otra: así no se repite la lógica del conteo. `IF / ELSEIF / ELSE` evalúa en orden, por eso el segundo caso solo necesita `<= 70` (ya se sabe que no es < 20).\n\nTambién se podría usar `CASE WHEN ... THEN ... END` en un `RETURN`.",
+    "hints": [
+      "Creá primero la función del ejercicio 24.",
+      "La segunda función la llama con SET v = fn_...(p_id_carrera).",
+      "IF ... ELSEIF ... ELSE ... END IF."
+    ],
+    "concepts": [
+      "FUNCTION",
+      "IF/ELSEIF",
+      "reutilización"
+    ],
+    "requirements": [
+      {
+        "pattern": "fn_cantidad_alumnos_activos_carrera\\s*\\(\\s*p_",
+        "message": "La función de clasificación tiene que reutilizar fn_cantidad_alumnos_activos_carrera."
+      }
+    ],
+    "check": {
+      "type": "state",
+      "probes": [],
+      "verifyQueries": [
+        "SELECT id_carrera, fn_clasificar_demanda_carrera(id_carrera) AS clasificacion FROM carreras"
+      ]
+    }
+  }
+]
