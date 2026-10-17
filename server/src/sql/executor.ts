@@ -1,5 +1,6 @@
 // Ejecuta un script (varias sentencias) sobre una conexión dedicada y
 // devuelve un resultado por sentencia, como el panel "Output" de Workbench.
+import type { Connection as CoreConnection } from 'mysql2';
 import type { Connection, FieldPacket, ResultSetHeader } from 'mysql2/promise';
 import { config } from '../config.js';
 import { openConnection, type Role } from '../db/connections.js';
@@ -56,89 +57,123 @@ export async function prepareSession(conn: Connection, opts: { readOnly: boolean
   if (opts.readOnly) await conn.query('SET SESSION TRANSACTION READ ONLY');
 }
 
+interface RawSet {
+  fields?: FieldPacket[];
+  rows: unknown[][];
+  header?: ResultSetHeader;
+  truncated: boolean;
+}
+
 /**
- * Ejecuta una sentencia con un tiempo máximo. Si se pasa, abre una conexión
- * auxiliar del mismo usuario y cancela la consulta con KILL QUERY
- * (un usuario siempre puede cancelar sus propias consultas).
+ * Ejecuta una sentencia leyendo las filas de a una (streaming), con dos límites:
+ *  - Memoria: se guardan como máximo MAX_ROWS filas por resultado; el resto se descarta
+ *    a medida que llega. (sql_select_limit no alcanza: no se aplica a los SELECT que
+ *    se ejecutan dentro de un procedimiento.)
+ *  - Tiempo: si se pasa QUERY_TIMEOUT_MS, una conexión auxiliar del mismo usuario
+ *    cancela la consulta con KILL QUERY (un usuario siempre puede cancelar las suyas).
  */
-async function queryWithTimeout(conn: Connection, role: Role, sql: string) {
-  let timer: NodeJS.Timeout | undefined;
+function queryBounded(conn: Connection, role: Role, sql: string): Promise<RawSet[]> {
+  const core = (conn as unknown as { connection: CoreConnection }).connection;
+  const sets: RawSet[] = [];
+  const at = (i: number) => (sets[i] ??= { rows: [], truncated: false });
   let killed = false;
-  const threadId = conn.threadId;
-  timer = setTimeout(async () => {
+  let anyTruncated = false;
+  let discarded = 0;
+  let killing: Promise<void> = Promise.resolve();
+
+  const kill = () => {
+    if (killed) return;
     killed = true;
-    try {
-      const killer = await openConnection(role);
-      await killer.query(`KILL QUERY ${Number(threadId)}`);
-      await killer.end();
-    } catch {
-      /* si falla, el error de la consulta original igual llega */
-    }
-  }, config.limits.timeoutMs + 500);
-  try {
-    return await conn.query({ sql, rowsAsArray: true });
-  } catch (err) {
-    if (killed) {
+    killing = (async () => {
+      try {
+        const killer = await openConnection(role);
+        await killer.query(`KILL QUERY ${Number(conn.threadId)}`);
+        await killer.end();
+      } catch {
+        /* si falla, el error de la consulta original igual llega */
+      }
+    })();
+  };
+  const timer = setTimeout(kill, config.limits.timeoutMs + 500);
+
+  return new Promise<RawSet[]>((resolve, reject) => {
+    const q = core.query({ sql, rowsAsArray: true });
+    q.on('fields', (fields: FieldPacket[], index = 0) => {
+      at(index).fields = fields;
+    });
+    q.on('result', (row: unknown, index = 0) => {
+      const set = at(index);
+      if (isHeader(row)) {
+        set.header = row;
+        return;
+      }
+      if (set.rows.length < config.limits.maxRows) {
+        set.rows.push(row as unknown[]);
+        return;
+      }
+      set.truncated = true;
+      anyTruncated = true;
+      // Un SELECT común ya viene cortado por sql_select_limit (MAX_ROWS + 1 filas), así que
+      // solo se cancela si siguen llegando filas: el caso de un SELECT dentro de un CALL.
+      discarded++;
+      if (discarded > 1) kill();
+    });
+    // Antes de devolver el control esperamos a que termine un KILL en curso, para que
+    // nunca alcance a la sentencia siguiente de la misma conexión.
+    q.on('error', async (err: unknown) => {
+      clearTimeout(timer);
+      await killing;
       const e = err as { errno?: number };
-      if (e.errno === undefined || e.errno === 1317) {
+      // Si la cortamos nosotros por exceso de filas, el resultado parcial es válido.
+      if (anyTruncated && (e.errno === 1317 || e.errno === undefined)) return resolve(sets.filter(Boolean));
+      if (killed && (e.errno === undefined || e.errno === 1317)) {
         Object.assign(err as object, { errno: 1317, code: 'ER_QUERY_INTERRUPTED' });
       }
-    }
-    throw err;
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+      reject(err);
+    });
+    q.on('end', async () => {
+      clearTimeout(timer);
+      await killing;
+      resolve(sets.filter(Boolean));
+    });
+  });
 }
 
 function isHeader(x: unknown): x is ResultSetHeader {
   return typeof x === 'object' && x !== null && !Array.isArray(x) && 'affectedRows' in x;
 }
 
-/** Convierte la respuesta de mysql2 (que varía si es SELECT, DML o CALL) en resultados uniformes. */
-function normalize(index: number, statement: string, raw: unknown, fields: unknown, durationMs: number): StatementResult[] {
+/** Convierte los conjuntos recibidos (SELECT, DML o CALL con varios resultados) en resultados uniformes. */
+function normalize(index: number, statement: string, sets: RawSet[], durationMs: number): StatementResult[] {
   const out: StatementResult[] = [];
-  const mkRows = (rows: unknown[][], f: FieldPacket[]): RowsResult => {
-    const truncated = rows.length > config.limits.maxRows;
-    const kept = truncated ? rows.slice(0, config.limits.maxRows) : rows;
-    return {
-      kind: 'rows',
-      index,
-      statement,
-      columns: (f ?? []).map((c) => ({ name: c.name, type: TYPE_NAMES[c.columnType ?? -1] ?? 'OTRO' })),
-      rows: kept,
-      rowCount: kept.length,
-      truncated,
-      durationMs,
-    };
-  };
-  const mkOk = (h: ResultSetHeader): OkResult => ({
-    kind: 'ok',
-    index,
-    statement,
-    affectedRows: h.affectedRows,
-    insertId: h.insertId,
-    warningCount: h.warningStatus ?? 0,
-    info: h.info ?? '',
-    durationMs,
-  });
-
-  if (isHeader(raw)) {
-    out.push(mkOk(raw));
-  } else if (Array.isArray(raw)) {
-    // CALL devuelve [rs1, rs2, ..., header] y fields = [f1, f2, ..., undefined]
-    const multi = Array.isArray(fields) && fields.length > 0 && (Array.isArray(fields[0]) || fields[0] === undefined) && raw.some((r) => isHeader(r));
-    if (multi) {
-      raw.forEach((part, k) => {
-        if (isHeader(part)) {
-          // el header final de un CALL solo aporta si no hubo resultados
-          if (k === raw.length - 1 && out.length > 0) return;
-          out.push(mkOk(part));
-        } else out.push(mkRows(part as unknown[][], (fields as FieldPacket[][])[k]));
+  sets.forEach((set, k) => {
+    if (set.fields) {
+      out.push({
+        kind: 'rows',
+        index,
+        statement,
+        columns: set.fields.map((c) => ({ name: c.name, type: TYPE_NAMES[c.columnType ?? -1] ?? 'OTRO' })),
+        rows: set.rows,
+        rowCount: set.rows.length,
+        truncated: set.truncated,
+        durationMs,
       });
-    } else {
-      out.push(mkRows(raw as unknown[][], fields as FieldPacket[]));
+    } else if (set.header) {
+      // el OK final de un CALL solo aporta si no hubo otros resultados
+      if (k === sets.length - 1 && out.length > 0 && sets.length > 1) return;
+      const h = set.header;
+      out.push({
+        kind: 'ok',
+        index,
+        statement,
+        affectedRows: h.affectedRows,
+        insertId: h.insertId,
+        warningCount: h.warningStatus ?? 0,
+        info: h.info ?? '',
+        durationMs,
+      });
     }
-  }
+  });
   return out;
 }
 
@@ -148,9 +183,9 @@ export async function runStatements(conn: Connection, role: Role, stmts: Stateme
     const s = stmts[i];
     const t0 = performance.now();
     try {
-      const [raw, fields] = await queryWithTimeout(conn, role, s.sql);
+      const sets = await queryBounded(conn, role, s.sql);
       const ms = Math.round(performance.now() - t0);
-      results.push(...normalize(i, s.sql, raw, fields, ms));
+      results.push(...normalize(i, s.sql, sets, ms));
     } catch (err) {
       return { results, error: toErrorInfo(err, i, s.line) };
     }

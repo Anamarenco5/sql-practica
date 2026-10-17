@@ -8,6 +8,7 @@ import { toErrorInfo, type SqlErrorInfo } from './errors.js';
 import { prepareSession, runStatements, type ScriptOutcome } from './executor.js';
 import { checkStatements, GuardError, type ExecMode } from './guard.js';
 import { splitSql, type Statement } from './splitter.js';
+import { semaphore } from '../util/semaphore.js';
 
 export class UserInputError extends Error {}
 
@@ -39,16 +40,36 @@ export interface Env {
   dispose: () => Promise<void>;
 }
 
+// Cada usuario de MySQL tiene un máximo de 20 conexiones (MAX_USER_CONNECTIONS del setup).
+// Cada entorno usa 1 conexión, más 1 extra si hay que cancelar por tiempo; el pool de
+// sandboxes usa SANDBOX_POOL más. Con 8 entornos por usuario queda margen de sobra.
+const envSlots = { reader: semaphore(8), sandbox: semaphore(8) };
+
 /** Abre el entorno de ejecución: la base de práctica (solo lectura) o un sandbox nuevo. */
 export async function openEnv(dataset: string, mode: ExecMode): Promise<Env> {
-  if (mode === 'readonly') {
-    const conn = await openConnection('reader', datasetDbName(dataset));
-    await prepareSession(conn, { readOnly: true });
-    return { conn, role: 'reader', dispose: () => conn.end().catch(() => {}) };
+  const role = mode === 'readonly' ? 'reader' : 'sandbox';
+  const slot = envSlots[role];
+  await slot.acquire();
+  let released = false;
+  const release = () => {
+    if (!released) {
+      released = true;
+      slot.release();
+    }
+  };
+  try {
+    if (mode === 'readonly') {
+      const conn = await openConnection('reader', datasetDbName(dataset));
+      await prepareSession(conn, { readOnly: true });
+      return { conn, role, dispose: () => conn.end().catch(() => {}).finally(release) };
+    }
+    const sbx = await createSandbox(dataset);
+    await prepareSession(sbx.conn, { readOnly: false });
+    return { conn: sbx.conn, role, dispose: () => sbx.dispose().finally(release) };
+  } catch (err) {
+    release();
+    throw err;
   }
-  const sbx = await createSandbox(dataset);
-  await prepareSession(sbx.conn, { readOnly: false });
-  return { conn: sbx.conn, role: 'sandbox', dispose: sbx.dispose };
 }
 
 /** Ejecuta un script completo en un entorno nuevo y lo descarta. */
