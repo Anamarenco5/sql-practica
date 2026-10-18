@@ -67,12 +67,16 @@ export const ExerciseSchema = z.object({
   requirements: z.array(Requirement).default([]),
   check: z.discriminatedUnion('type', [ResultCheck, StateCheck]),
   custom: z.boolean().default(false),
+  // Solo para ejercicios propios: quién lo creó y si lo ven todos (los publica una administradora).
+  ownerId: z.number().int().optional(),
+  public: z.boolean().default(false),
 });
 
 export type Exercise = z.infer<typeof ExerciseSchema>;
 
 /** Lo que ve el navegador: sin la solución (se pide aparte, después de intentarlo). */
-export function publicExercise(e: Exercise) {
-  const { solution: _s, explanation: _e, ...rest } = e;
-  return rest; // las pistas sí viajan: la interfaz las revela de a una
+export function publicExercise(e: Exercise, viewerId?: number) {
+  const { solution: _s, explanation: _e, ownerId, ...rest } = e;
+  // las pistas sí viajan: la interfaz las revela de a una
+  return { ...rest, mine: e.custom && ownerId !== undefined && ownerId === viewerId };
 }

@@ -18,7 +18,7 @@ interface Filters {
   difficulty: Difficulty | '';
   status: Status | '';
   mode: Mode | '';
-  source: 'tp' | 'propios' | '';
+  source: 'tp' | 'extra' | 'propios' | '';
 }
 
 const EMPTY: Filters = { q: '', difficulty: '', status: '', mode: '', source: '' };
@@ -117,7 +117,7 @@ export function Dashboard() {
         (!f.difficulty || e.difficulty === f.difficulty) &&
         (!f.status || status(e) === f.status) &&
         (!f.mode || e.mode === f.mode) &&
-        (!f.source || (f.source === 'propios' ? e.custom : !e.custom)),
+        (!f.source || (f.source === 'propios' ? e.mine : f.source === 'extra' ? e.custom && !e.mine : !e.custom)),
     );
   }, [list, f]);
 
@@ -184,7 +184,8 @@ export function Dashboard() {
         <select value={f.source} onChange={(e) => set('source', e.target.value as Filters['source'])} aria-label="Origen">
           <option value="">Todos</option>
           <option value="tp">De los TPs</option>
-          <option value="propios">Propios</option>
+          <option value="extra">Extra (publicados)</option>
+          <option value="propios">Mis ejercicios</option>
         </select>
         {filtering && (
           <button className="link" onClick={() => setF(EMPTY)}>
@@ -218,7 +219,7 @@ export function Dashboard() {
                     <Link to={`/ejercicio/${e.id}`} className={`ex-row st-${s}`}>
                       <span className="dot" title={STATUS_LABEL[s]} aria-label={STATUS_LABEL[s]} />
                       <span className="ex-title">{e.title}</span>
-                      <span className="ex-src muted">{e.custom ? 'Propio' : (e.source ?? '')}</span>
+                      <span className="ex-src muted">{e.mine ? 'Propio' : e.custom ? 'Extra' : (e.source ?? '')}</span>
                       <span className={`tag diff-${e.difficulty}`}>{DIFFICULTY_LABEL[e.difficulty]}</span>
                       <span className={`tag mode-${e.mode}`}>{MODE_LABEL[e.mode]}</span>
                       <span className="ex-att muted">{e.progress ? `${e.progress.attempts} intento${e.progress.attempts === 1 ? '' : 's'}` : ''}</span>

@@ -37,7 +37,7 @@ export interface ReviewItem {
   concepts: string[];
 }
 
-export async function buildReview(exercises: Exercise[], progress: Map<string, ExerciseProgress>) {
+export async function buildReview(userId: number, exercises: Exercise[], progress: Map<string, ExerciseProgress>) {
   const byId = new Map(exercises.map((e) => [e.id, e]));
 
   const items: (ReviewItem & { weight: number })[] = [];
@@ -83,10 +83,11 @@ export async function buildReview(exercises: Exercise[], progress: Map<string, E
   const [rows] = await getAppPool().query<RowDataPacket[]>(
     `SELECT codigo_error AS code, COUNT(*) AS n
        FROM intentos
-      WHERE codigo_error IS NOT NULL
+      WHERE id_usuario = ? AND codigo_error IS NOT NULL
       GROUP BY codigo_error
       ORDER BY n DESC
       LIMIT 5`,
+    [userId],
   );
   const errors = rows.map((r) => ({ code: r.code as string, label: ERROR_LABELS[r.code as string] ?? r.code, count: Number(r.n) }));
 

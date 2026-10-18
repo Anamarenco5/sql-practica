@@ -2,6 +2,7 @@
 // Antes de guardar, el backend ejecuta la solución y verifica que apruebe su propio ejercicio.
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../auth';
 import { api, type ExerciseDefinition, type Probe, type Requirement, type TableInfo, type Topic, type ValidationResult } from '../api';
 import { Markdown } from '../components/Markdown';
 import { ErrorBox, GradePanel, ResultsPanel } from '../components/Results';
@@ -42,6 +43,7 @@ export function ExerciseEditor() {
   const { id } = useParams();
   const editing = Boolean(id);
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [def, setDef] = useState<ExerciseDefinition>(NEW);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [schema, setSchema] = useState<TableInfo[]>([]);
@@ -212,6 +214,17 @@ export function ExerciseEditor() {
             </label>
           </div>
         </fieldset>
+
+        {user?.isAdmin && (
+          <fieldset>
+            <legend>Visibilidad</legend>
+            <label className="check">
+              <input type="checkbox" checked={Boolean(def.public)} onChange={(e) => set('public', e.target.checked)} />
+              Publicar para todas las personas que usan la app
+            </label>
+            <span className="field-help">Si no lo marcás, el ejercicio es solo tuyo.</span>
+          </fieldset>
+        )}
 
         <fieldset>
           <legend>Enunciado</legend>

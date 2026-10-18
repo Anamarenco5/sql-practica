@@ -118,6 +118,71 @@ kbd {
   font-size: 0.9rem;
 }
 
+.topbar-user {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 0.92rem;
+}
+.topbar-user .tag {
+  margin-left: 8px;
+}
+
+/* ---------- acceso ---------- */
+.auth {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 56px 20px 64px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(300px, 400px);
+  gap: 56px;
+  align-items: start;
+}
+.auth-intro h1 {
+  font-size: clamp(2rem, 4.5vw, 2.9rem);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+  margin-bottom: 18px;
+}
+.auth-intro p {
+  font-size: 1.08rem;
+  max-width: 52ch;
+  margin: 0 0 12px;
+}
+.auth-form {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.auth-form .tabs {
+  margin: 0 -8px 4px;
+}
+.auth-form input {
+  font: inherit;
+  font-size: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: var(--ink);
+  background: var(--surface);
+}
+.auth-form .btn {
+  justify-content: center;
+}
+.auth-form p {
+  margin: 0;
+}
+.form-error {
+  margin: 0;
+  color: var(--red);
+}
+
 /* ---------- botones ---------- */
 .btn {
   font: inherit;
@@ -1154,6 +1219,14 @@ a.tag {
   }
   .review-grid {
     grid-template-columns: 1fr;
+  }
+  .auth {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding-top: 28px;
+  }
+  .topbar-note {
+    display: none;
   }
   .hero-actions {
     align-items: stretch;

@@ -4,6 +4,7 @@ import type { RowDataPacket } from 'mysql2/promise';
 import { getAppPool } from '../db/connections.js';
 
 export interface AttemptInput {
+  userId: number;
   exerciseId: string;
   sql: string;
   correct: boolean;
@@ -13,8 +14,8 @@ export interface AttemptInput {
 
 export async function recordAttempt(a: AttemptInput): Promise<void> {
   await getAppPool().query(
-    'INSERT INTO intentos (id_ejercicio, sql_texto, correcto, codigo_error, pistas_vistas) VALUES (?, ?, ?, ?, ?)',
-    [a.exerciseId, a.sql, a.correct, a.errorCode ?? null, a.hintsUsed],
+    'INSERT INTO intentos (id_usuario, id_ejercicio, sql_texto, correcto, codigo_error, pistas_vistas) VALUES (?, ?, ?, ?, ?, ?)',
+    [a.userId, a.exerciseId, a.sql, a.correct, a.errorCode ?? null, a.hintsUsed],
   );
 }
 
@@ -28,7 +29,7 @@ export interface ExerciseProgress {
   maxHints: number;
 }
 
-export async function getProgress(): Promise<Map<string, ExerciseProgress>> {
+export async function getProgress(userId: number): Promise<Map<string, ExerciseProgress>> {
   const [rows] = await getAppPool().query<RowDataPacket[]>(
     `SELECT id_ejercicio,
             COUNT(*)                         AS intentos,
@@ -38,7 +39,9 @@ export async function getProgress(): Promise<Map<string, ExerciseProgress>> {
             MAX(fecha)                       AS ultimo,
             MAX(pistas_vistas)               AS pistas
        FROM intentos
+      WHERE id_usuario = ?
       GROUP BY id_ejercicio`,
+    [userId],
   );
   const map = new Map<string, ExerciseProgress>();
   for (const r of rows) {
@@ -55,22 +58,22 @@ export async function getProgress(): Promise<Map<string, ExerciseProgress>> {
   return map;
 }
 
-export async function getAttempts(exerciseId: string, limit = 20) {
+export async function getAttempts(userId: number, exerciseId: string, limit = 20) {
   const [rows] = await getAppPool().query<RowDataPacket[]>(
-    'SELECT id_intento AS id, sql_texto AS `sql`, correcto AS correct, codigo_error AS errorCode, fecha AS createdAt FROM intentos WHERE id_ejercicio = ? ORDER BY fecha DESC, id_intento DESC LIMIT ?',
-    [exerciseId, limit],
+    'SELECT id_intento AS id, sql_texto AS `sql`, correcto AS correct, codigo_error AS errorCode, fecha AS createdAt FROM intentos WHERE id_usuario = ? AND id_ejercicio = ? ORDER BY fecha DESC, id_intento DESC LIMIT ?',
+    [userId, exerciseId, limit],
   );
   return rows.map((r) => ({ ...r, correct: Boolean(r.correct) }));
 }
 
-export async function saveDraft(exerciseId: string, sql: string): Promise<void> {
+export async function saveDraft(userId: number, exerciseId: string, sql: string): Promise<void> {
   await getAppPool().query(
-    'INSERT INTO borradores (id_ejercicio, sql_texto) VALUES (?, ?) ON DUPLICATE KEY UPDATE sql_texto = VALUES(sql_texto)',
-    [exerciseId, sql],
+    'INSERT INTO borradores (id_usuario, id_ejercicio, sql_texto) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE sql_texto = VALUES(sql_texto)',
+    [userId, exerciseId, sql],
   );
 }
 
-export async function getDraft(exerciseId: string): Promise<string | null> {
-  const [rows] = await getAppPool().query<RowDataPacket[]>('SELECT sql_texto FROM borradores WHERE id_ejercicio = ?', [exerciseId]);
+export async function getDraft(userId: number, exerciseId: string): Promise<string | null> {
+  const [rows] = await getAppPool().query<RowDataPacket[]>('SELECT sql_texto FROM borradores WHERE id_usuario = ? AND id_ejercicio = ?', [userId, exerciseId]);
   return rows.length ? (rows[0].sql_texto as string) : null;
 }

@@ -22,6 +22,8 @@ export interface ExerciseSummary {
   dataset: string;
   source?: string;
   custom: boolean;
+  public?: boolean;
+  mine?: boolean;
   progress: Progress | null;
 }
 
@@ -33,6 +35,7 @@ export interface Exercise extends ExerciseSummary {
   concepts: string[];
   check: { type: 'result'; orderMatters: boolean; checkColumnNames: boolean } | { type: 'state'; probes: { description: string; expect: 'ok' | 'error' }[] };
   draft: string | null;
+  canEdit?: boolean;
 }
 
 export interface Topic {
@@ -151,9 +154,17 @@ export interface ExerciseDefinition {
   hints: string[];
   concepts: string[];
   requirements: Requirement[];
+  public?: boolean;
   check:
     | { type: 'result'; orderMatters: boolean; orderKeys?: number[]; checkColumnNames: boolean; numericTolerance?: number }
     | { type: 'state'; verifyQueries: string[]; probes: Probe[]; numericTolerance?: number };
+}
+
+export interface User {
+  id: number;
+  email: string;
+  name: string;
+  isAdmin: boolean;
 }
 
 export interface ValidationResult {
@@ -183,11 +194,17 @@ async function req<T>(path: string, init?: RequestInit, acceptStatus: number[] =
     throw new ApiError('No se pudo conectar con el servidor. ¿Está corriendo "npm run dev"?', 0);
   }
   const body = await res.json().catch(() => ({}));
+  if (res.status === 401 && !path.startsWith('/api/auth/')) window.dispatchEvent(new Event('sesion-vencida'));
   if (!res.ok && !acceptStatus.includes(res.status)) throw new ApiError(body.error ?? `Error ${res.status}`, res.status);
   return body as T;
 }
 
 export const api = {
+  me: () => req<User>('/api/auth/me'),
+  login: (email: string, password: string) => req<User>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  register: (name: string, email: string, password: string) =>
+    req<User>('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) }),
+  logout: () => req<{ ok: true }>('/api/auth/logout', { method: 'POST' }),
   topics: () => req<Topic[]>('/api/topics'),
   exercises: () => req<ExerciseSummary[]>('/api/exercises'),
   exercise: (id: string) => req<Exercise>(`/api/exercises/${encodeURIComponent(id)}`),
