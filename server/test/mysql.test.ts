@@ -1,6 +1,7 @@
 // Pruebas de integración contra MySQL real (necesitan haber corrido npm run db:setup).
 import request from 'supertest';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { cleanupTestUsers, newUser } from './helpers.js';
 import { createApp } from '../src/app.js';
 import { closePools, getAppPool } from '../src/db/connections.js';
 import { closeSandboxPool } from '../src/db/sandbox.js';
@@ -15,6 +16,7 @@ afterAll(async () => {
   // limpiamos los intentos que generaron las pruebas
   await getAppPool().query("DELETE FROM intentos WHERE sql_texto LIKE '%/*test*/%'");
   await getAppPool().query("DELETE FROM borradores WHERE sql_texto LIKE '%/*test*/%'");
+  await cleanupTestUsers();
   await closeSandboxPool();
   await closePools();
 });
@@ -149,30 +151,34 @@ describe('aislamiento y seguridad', () => {
 
 describe('API', () => {
   const app = createApp();
+  let agent: Awaited<ReturnType<typeof newUser>>['agent'];
+  beforeAll(async () => {
+    agent = (await newUser(app)).agent;
+  });
 
   it('lista ejercicios sin exponer soluciones', async () => {
-    const res = await request(app).get('/api/exercises/u-tp3-01');
+    const res = await agent.get('/api/exercises/u-tp3-01');
     expect(res.status).toBe(200);
     expect(res.body.solution).toBeUndefined();
     expect(res.body.statement).toBeTruthy();
   });
 
   it('ejecuta y corrige', async () => {
-    const run = await request(app).post('/api/exercises/u-basico-01/run').send({ sql: 'SELECT * FROM aulas /*test*/' });
+    const run = await agent.post('/api/exercises/u-basico-01/run').send({ sql: 'SELECT * FROM aulas /*test*/' });
     expect(run.body.results[0].rowCount).toBe(10);
-    const chk = await request(app).post('/api/exercises/u-basico-01/check').send({ sql: 'SELECT * FROM aulas /*test*/' });
+    const chk = await agent.post('/api/exercises/u-basico-01/check').send({ sql: 'SELECT * FROM aulas /*test*/' });
     expect(chk.body.correct).toBe(true);
-    const sol = await request(app).get('/api/exercises/u-basico-01/solution');
+    const sol = await agent.get('/api/exercises/u-basico-01/solution');
     expect(sol.status).toBe(200);
   });
 
   it('devuelve el esquema del dataset', async () => {
-    const res = await request(app).get('/api/datasets/universidad/schema');
+    const res = await agent.get('/api/datasets/universidad/schema');
     expect(res.body.find((t: { name: string }) => t.name === 'alumnos').rowCount).toBe(1000);
   });
 
   it('rechaza nombres de tabla inventados en la muestra de datos', async () => {
-    const res = await request(app).get('/api/datasets/universidad/tables/alumnos`;DROP/sample');
+    const res = await agent.get('/api/datasets/universidad/tables/alumnos`;DROP/sample');
     expect(res.status).toBe(404);
   });
 
@@ -190,40 +196,39 @@ describe('API', () => {
       check: { type: 'result' },
     };
     // una solución que no corre no se puede guardar
-    const bad = await request(app).post('/api/custom-exercises').send({ ...def, solution: 'SELECT nada FROM aulas' });
+    const bad = await agent.post('/api/custom-exercises').send({ ...def, solution: 'SELECT nada FROM aulas' });
     expect(bad.status).toBe(422);
     expect(bad.body.errors.join(' ')).toMatch(/Unknown column/);
 
-    const created = await request(app).post('/api/custom-exercises').send(def);
+    const created = await agent.post('/api/custom-exercises').send(def);
     expect(created.status).toBe(201);
     const id = created.body.id as string;
     expect(id).toMatch(/^c-prueba-test-aulas-grandes-/);
 
-    const list = await request(app).get('/api/exercises');
+    const list = await agent.get('/api/exercises');
     expect(list.body.some((e: { id: string; custom: boolean }) => e.id === id && e.custom)).toBe(true);
 
-    const ok = await request(app).post(`/api/exercises/${id}/check`).send({ sql: 'SELECT nombre, capacidad FROM aulas WHERE capacidad >= 50 /*test*/' });
+    const ok = await agent.post(`/api/exercises/${id}/check`).send({ sql: 'SELECT nombre, capacidad FROM aulas WHERE capacidad >= 50 /*test*/' });
     expect(ok.body.correct).toBe(true);
 
-    const edited = await request(app).put(`/api/custom-exercises/${id}`).send({ ...def, solution: 'SELECT nombre, capacidad FROM aulas WHERE capacidad > 30' });
+    const edited = await agent.put(`/api/custom-exercises/${id}`).send({ ...def, solution: 'SELECT nombre, capacidad FROM aulas WHERE capacidad > 30' });
     expect(edited.status).toBe(200);
-    const now = await request(app).post(`/api/exercises/${id}/check`).send({ sql: 'SELECT nombre, capacidad FROM aulas WHERE capacidad >= 50 /*test*/' });
+    const now = await agent.post(`/api/exercises/${id}/check`).send({ sql: 'SELECT nombre, capacidad FROM aulas WHERE capacidad >= 50 /*test*/' });
     expect(now.body.correct).toBe(false); // la corrección usa la solución nueva
 
-    const del = await request(app).delete(`/api/custom-exercises/${id}`);
+    const del = await agent.delete(`/api/custom-exercises/${id}`);
     expect(del.status).toBe(200);
-    expect((await request(app).get(`/api/exercises/${id}`)).status).toBe(404);
-    await getAppPool().query('DELETE FROM intentos WHERE id_ejercicio = ?', [id]);
+    expect((await agent.get(`/api/exercises/${id}`)).status).toBe(404);
   });
 
   it('no permite pisar un ejercicio de fábrica', async () => {
-    const res = await request(app).put('/api/custom-exercises/u-tp3-01').send({});
+    const res = await agent.put('/api/custom-exercises/u-tp3-01').send({});
     expect(res.status).toBe(404);
   });
 
   it('arma el panel de repaso', async () => {
-    await request(app).post('/api/exercises/u-tp3-16/check').send({ sql: 'SELECT 1 /*test*/', hintsUsed: 0 });
-    const res = await request(app).get('/api/review');
+    await agent.post('/api/exercises/u-tp3-16/check').send({ sql: 'SELECT 1 /*test*/', hintsUsed: 0 });
+    const res = await agent.get('/api/review');
     expect(res.status).toBe(200);
     expect(res.body.items.some((i: { id: string }) => i.id === 'u-tp3-16')).toBe(true);
     expect(res.body.topics.find((t: { id: string }) => t.id === 'left-join').struggling).toBeGreaterThan(0);

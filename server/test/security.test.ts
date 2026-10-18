@@ -2,7 +2,8 @@
 // y persistencia. Necesita MySQL con "npm run db:setup" hecho.
 import mysql from 'mysql2/promise';
 import request from 'supertest';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { cleanupTestUsers, newUser } from './helpers.js';
 import { createApp } from '../src/app.js';
 import { config } from '../src/config.js';
 import { closePools, getAppPool } from '../src/db/connections.js';
@@ -14,6 +15,7 @@ import { runScript } from '../src/sql/runner.js';
 
 afterAll(async () => {
   await getAppPool().query("DELETE FROM intentos WHERE sql_texto LIKE '%/*sec*/%'");
+  await cleanupTestUsers();
   await closeSandboxPool();
   await closePools();
 });
@@ -109,6 +111,10 @@ describe('limpieza de sandboxes', () => {
 
 describe('API: acceso solo local', () => {
   const app = createApp();
+  let agent: Awaited<ReturnType<typeof newUser>>['agent'];
+  beforeAll(async () => {
+    agent = (await newUser(app)).agent;
+  });
 
   it('rechaza un Host ajeno (DNS rebinding)', async () => {
     const res = await request(app).get('/api/exercises').set('Host', 'atacante.com');
@@ -132,12 +138,12 @@ describe('API: acceso solo local', () => {
   });
 
   it('valida los datos de entrada', async () => {
-    const res = await request(app).post('/api/exercises/u-basico-01/run').send({ sql: 123 });
+    const res = await agent.post('/api/exercises/u-basico-01/run').send({ sql: 123 });
     expect(res.status).toBe(400);
   });
 
   it('no filtra detalles internos en los errores', async () => {
-    const res = await request(app).get('/api/datasets/inexistente/schema');
+    const res = await agent.get('/api/datasets/inexistente/schema');
     expect(res.status).toBe(404);
     expect(JSON.stringify(res.body)).not.toMatch(/at |\.ts|password/i);
   });
@@ -145,7 +151,7 @@ describe('API: acceso solo local', () => {
 
 describe('carga concurrente', () => {
   it('20 comprobaciones simultáneas de ejercicios de modificación terminan bien', async () => {
-    const ex = (await findExercise('u-tp4-03'))!;
+    const ex = (await findExercise('u-tp4-03', { id: 0, isAdmin: false }))!;
     const antes = (await sandboxDbs()).length;
     const t0 = Date.now();
     const results = await Promise.all(Array.from({ length: 20 }, () => grade(ex, ex.solution)));
@@ -157,7 +163,7 @@ describe('carga concurrente', () => {
   }, 120000);
 
   it('50 consultas simultáneas de solo lectura', async () => {
-    const ex = (await findExercise('u-tp3-14'))!;
+    const ex = (await findExercise('u-tp3-14', { id: 0, isAdmin: false }))!;
     const results = await Promise.all(Array.from({ length: 50 }, () => grade(ex, ex.solution)));
     expect(results.every((r) => r.correct)).toBe(true);
   }, 120000);
@@ -165,9 +171,10 @@ describe('carga concurrente', () => {
 
 describe('persistencia', () => {
   it('el progreso sobrevive a cerrar y reabrir las conexiones (reinicio del servidor)', async () => {
-    await recordAttempt({ exerciseId: 'u-basico-02', sql: 'SELECT 1 /*sec*/', correct: true, hintsUsed: 1 });
+    const { user } = await newUser(createApp());
+    await recordAttempt({ userId: user.id, exerciseId: 'u-basico-02', sql: 'SELECT 1 /*sec*/', correct: true, hintsUsed: 1 });
     await closePools(); // como si se cerrara el servidor
-    const p = (await getProgress()).get('u-basico-02');
+    const p = (await getProgress(user.id)).get('u-basico-02');
     expect(p?.solved).toBe(true);
   });
 });
