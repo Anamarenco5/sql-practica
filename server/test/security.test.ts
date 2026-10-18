@@ -7,7 +7,8 @@ import { cleanupTestUsers, newUser } from './helpers.js';
 import { createApp } from '../src/app.js';
 import { config } from '../src/config.js';
 import { closePools, getAppPool } from '../src/db/connections.js';
-import { cleanupOrphanSandboxes, closeSandboxPool } from '../src/db/sandbox.js';
+import { grantMode } from '../src/db/grants.js';
+import { cleanupOrphanSandboxes, closeSandboxPool, createSandbox } from '../src/db/sandbox.js';
 import { findExercise } from '../src/exercises/repository.js';
 import { grade } from '../src/grading/grader.js';
 import { getProgress, recordAttempt } from '../src/progress/store.js';
@@ -20,8 +21,15 @@ afterAll(async () => {
   await closePools();
 });
 
+// Con partial_revokes (Aiven) el usuario sandbox no puede crear bases ni ver las ajenas:
+// para preparar y revisar las pruebas de limpieza se usa el administrador.
+const managerConn = async () => {
+  const cred = (await grantMode()) === 'por-base' ? config.admin : config.sandbox;
+  return mysql.createConnection({ host: config.mysql.host, port: config.mysql.port, user: cred.user, password: cred.password(), ssl: config.mysql.ssl });
+};
+
 const sandboxDbs = async () => {
-  const conn = await mysql.createConnection({ host: config.mysql.host, port: config.mysql.port, user: config.sandbox.user, password: config.sandbox.password() });
+  const conn = await managerConn();
   try {
     const [rows] = await conn.query("SHOW DATABASES LIKE 'sqlp\\_sbx\\_%'");
     return (rows as Record<string, string>[]).map((r) => Object.values(r)[0]);
@@ -96,7 +104,7 @@ describe('agotamiento de recursos', () => {
 
 describe('limpieza de sandboxes', () => {
   it('borra bases sqlp_sbx_ con nombres extraños y respeta las recientes', async () => {
-    const conn = await mysql.createConnection({ host: config.mysql.host, port: config.mysql.port, user: config.sandbox.user, password: config.sandbox.password() });
+    const conn = await managerConn();
     await conn.query('CREATE DATABASE IF NOT EXISTS sqlp_sbx_huerfana');
     const reciente = `sqlp_sbx_${Date.now().toString(36)}_0123abcd`;
     await conn.query(`CREATE DATABASE \`${reciente}\``);
@@ -106,6 +114,27 @@ describe('limpieza de sandboxes', () => {
     expect(quedan).toContain(reciente);
     await conn.query(`DROP DATABASE \`${reciente}\``);
     await conn.end();
+  });
+
+  it('con partial_revokes: el sandbox solo accede a su copia y el permiso se quita al terminar', async () => {
+    if ((await grantMode()) !== 'por-base') return; // solo aplica a servidores como Aiven
+    const a = await createSandbox('universidad');
+    const b = await createSandbox('universidad');
+    try {
+      await expect(a.conn.query('CREATE DATABASE sqlp_sbx_ajena')).rejects.toThrow(/denied/i);
+      await expect(a.conn.query('DELETE FROM sqlp_ds_universidad.notas')).rejects.toThrow(/denied/i);
+      await expect(b.conn.query('SELECT COUNT(*) FROM notas')).resolves.toBeDefined();
+    } finally {
+      await a.dispose();
+      await b.dispose();
+    }
+    // Después de borrar, el usuario sandbox no puede recrear la base con el mismo nombre.
+    const conn = await mysql.createConnection({ host: config.mysql.host, port: config.mysql.port, user: config.sandbox.user, password: config.sandbox.password(), ssl: config.mysql.ssl });
+    try {
+      await expect(conn.query(`CREATE DATABASE \`${a.name}\``)).rejects.toThrow(/denied/i);
+    } finally {
+      await conn.end();
+    }
   });
 });
 

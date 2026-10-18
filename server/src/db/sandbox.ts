@@ -8,6 +8,7 @@ import type { Connection } from 'mysql2/promise';
 import { config, SANDBOX_PREFIX } from '../config.js';
 import { openConnection } from './connections.js';
 import { datasetDbName, getDataset } from './datasets.js';
+import { closeAdminPool, dropSandboxDb, getAdminPool, grantMode, provisionSandboxDb } from './grants.js';
 
 interface TableDdl {
   name: string;
@@ -79,6 +80,7 @@ export async function closeSandboxPool(): Promise<void> {
   const all = [...pool.values()].flat();
   pool.clear();
   await Promise.all(all.map((p) => p.then((s) => s.dispose()).catch(() => {})));
+  await closeAdminPool();
 }
 
 async function buildSandbox(datasetId: string): Promise<Sandbox> {
@@ -86,20 +88,34 @@ async function buildSandbox(datasetId: string): Promise<Sandbox> {
   if (!ds) throw new Error(`Dataset desconocido: ${datasetId}`);
   // El nombre lleva la hora de creación para poder limpiar huérfanos viejos sin tocar los activos.
   const name = `${SANDBOX_PREFIX}${Date.now().toString(36)}_${crypto.randomBytes(4).toString('hex')}`;
-  const conn = await openConnection('sandbox');
+  const perDb = (await grantMode()) === 'por-base';
+  if (perDb) await provisionSandboxDb(name);
+  let conn: Connection;
+  try {
+    conn = await openConnection('sandbox');
+  } catch (err) {
+    if (perDb) await dropSandboxDb(name).catch(() => {});
+    throw err;
+  }
   const dispose = async () => {
     try {
-      await conn.query(`DROP DATABASE IF EXISTS \`${name}\``);
-    } catch {
-      // la conexión pudo quedar inutilizable (timeout, error fatal): usamos otra
-      const c2 = await openConnection('sandbox');
-      await c2.query(`DROP DATABASE IF EXISTS \`${name}\``).finally(() => c2.end());
+      if (perDb) {
+        await dropSandboxDb(name);
+      } else {
+        try {
+          await conn.query(`DROP DATABASE IF EXISTS \`${name}\``);
+        } catch {
+          // la conexión pudo quedar inutilizable (timeout, error fatal): usamos otra
+          const c2 = await openConnection('sandbox');
+          await c2.query(`DROP DATABASE IF EXISTS \`${name}\``).finally(() => c2.end());
+        }
+      }
     } finally {
       await conn.end().catch(() => {});
     }
   };
   try {
-    await conn.query(`CREATE DATABASE \`${name}\``);
+    if (!perDb) await conn.query(`CREATE DATABASE \`${name}\``);
     await conn.query(`USE \`${name}\``);
     const ddl = await getDdl(conn, datasetId);
     await conn.query('SET FOREIGN_KEY_CHECKS = 0');
@@ -119,9 +135,12 @@ async function buildSandbox(datasetId: string): Promise<Sandbox> {
 
 /** Borra sandboxes que hayan quedado de una ejecución interrumpida (ej: se cortó el servidor). */
 export async function cleanupOrphanSandboxes(olderThanMs = 10 * 60 * 1000): Promise<number> {
-  const conn = await openConnection('sandbox');
+  const perDb = (await grantMode()) === 'por-base';
+  // En modo "por-base" el usuario sandbox solo ve sus propias bases: lista y borra el administrador.
+  const conn = perDb ? null : await openConnection('sandbox');
+  const query = (sql: string) => (conn ? conn.query(sql) : getAdminPool().query(sql));
   try {
-    const [rows] = await conn.query(`SHOW DATABASES LIKE 'sqlp\\_sbx\\_%'`);
+    const [rows] = await query(`SHOW DATABASES LIKE 'sqlp\\_sbx\\_%'`);
     let n = 0;
     for (const r of rows as Record<string, string>[]) {
       const db = Object.values(r)[0];
@@ -131,11 +150,12 @@ export async function cleanupOrphanSandboxes(olderThanMs = 10 * 60 * 1000): Prom
       const created = m ? parseInt(m[1], 36) : NaN;
       const age = Date.now() - created;
       if (Number.isFinite(created) && age >= 0 && age < olderThanMs) continue;
-      await conn.query(`DROP DATABASE IF EXISTS \`${db}\``);
+      if (perDb && /^[a-z0-9_]+$/.test(db)) await dropSandboxDb(db);
+      else await query(`DROP DATABASE IF EXISTS \`${db.replace(/`/g, '``')}\``);
       n++;
     }
     return n;
   } finally {
-    await conn.end();
+    await conn?.end();
   }
 }

@@ -162,6 +162,7 @@ Además:
 
 - Los ejercicios de consulta corren en una sesión `READ ONLY`.
 - Los de modificación corren sobre una copia `sqlp_sbx_<id>` que se crea y se borra en cada ejecución. La base original `sqlp_ds_universidad` nunca cambia. Para que la copia sea rápida, la tabla `asistencias` (180.000 filas) se copia vacía.
+- Si el servidor tiene `partial_revokes` activado (Aiven lo usa), MySQL toma `%` y `_` de los `GRANT` como caracteres literales y el permiso `sqlp_sbx_*` con comodín no funciona. El setup lo detecta solo: en ese caso `sqlp_sandbox` no recibe ningún permiso para crear bases, y el servidor, con el usuario administrador, crea cada copia, le da permiso a `sqlp_sandbox` solo sobre esa base y al terminar la borra y le quita el permiso. Por eso en Render `MYSQL_ADMIN_PASSWORD` tiene que quedar cargada.
 - Hay un tiempo máximo por consulta (`QUERY_TIMEOUT_MS`, 5 s): si se pasa, se cancela con `KILL QUERY`. También hay un máximo de filas (`MAX_ROWS`, 10.000).
 - Para que "Comprobar" responda rápido, el servidor mantiene `SANDBOX_POOL` copias (2 por defecto) ya preparadas. Se borran al cerrar el servidor con `Ctrl + C`, y las que queden de un corte se borran al iniciar.
 - Se bloquean `GRANT`, `CREATE USER`, `DROP DATABASE`, `INTO OUTFILE`, `LOAD DATA`, `SET GLOBAL`, `USE`, SQL dinámico (`PREPARE`), eventos (`CREATE EVENT`), etc., con un mensaje claro. Los permisos de MySQL son la protección principal; este filtro es una segunda capa.
@@ -195,6 +196,7 @@ Cómo armar la corrección de uno de modificación:
 |---|---|
 | `ECONNREFUSED` | MySQL no está iniciado. Inicialo desde Servicios (MySQL80) o Workbench. |
 | `ER_ACCESS_DENIED_ERROR` en el setup | La contraseña de root en `MYSQL_ADMIN_PASSWORD` no es correcta. |
+| `Access denied for AuthId ... to database 'mysql'` | Versión vieja del setup con un servidor con `partial_revokes` (Aiven): actualizá el código. |
 | `ER_ACCESS_DENIED_ERROR` al usar la app | Cambiaste contraseñas en `.env` después del setup: volvé a correr `npm run db:setup`. |
 | Error 1419 al crear un trigger | Volvé a correr `npm run db:setup`. Si sigue fallando, en Workbench como root: `SET PERSIST log_bin_trust_function_creators = 1;` |
 | Puerto 3001 o 5173 ocupado | Cambiá `PORT` en `server/.env` y el proxy en `client/vite.config.ts`. |

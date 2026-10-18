@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import mysql, { type Connection, type RowDataPacket } from 'mysql2/promise';
 import { config, DATASET_PREFIX } from '../config.js';
 import { datasetDbName, datasetScriptPath, listDatasets } from '../db/datasets.js';
+import { detectGrantMode, grantDbName } from '../db/grants.js';
 import { splitSql } from '../sql/splitter.js';
 import { migrateAppSchema } from './appSchema.js';
 
@@ -62,26 +63,35 @@ export async function runSetup(opts: SetupOptions): Promise<void> {
     log(`Base de la app ${appDb} lista${migrated.length ? ` (migraciones: ${migrated.join('; ')})` : ''}`);
 
     // 2. Usuarios con permisos mínimos
+    // Con partial_revokes (Aiven) los comodines de los GRANT no funcionan: ver db/grants.ts.
+    const mode = await detectGrantMode((sql) => admin.query(sql));
+    log(mode === 'por-base' ? 'Servidor con partial_revokes: permisos de sandbox por base (los da la app al crear cada copia)' : 'Permisos de sandbox con comodín sqlp_sbx_*');
+    // Permisos de lectura sobre cada base de práctica, con el nombre exacto (sin comodines).
+    const datasetGrants = listDatasets().map((ds) => `SELECT, SHOW VIEW ON ${grantDbName(datasetDbName(ds.id), mode)}.*`);
     const users = [
-      { user: config.app.user, password: config.app.password(), grants: [`ALL PRIVILEGES ON \`${appDb}\`.*`] },
-      { user: config.reader.user, password: config.reader.password(), grants: [`SELECT, SHOW VIEW ON \`sqlp\\_ds\\_%\`.*`] },
+      { user: config.app.user, password: config.app.password(), grants: [`ALL PRIVILEGES ON ${grantDbName(appDb, mode)}.*`] },
+      { user: config.reader.user, password: config.reader.password(), grants: datasetGrants },
       {
         user: config.sandbox.user,
         password: config.sandbox.password(),
         grants: [
           // control total, pero solo dentro de bases cuyo nombre empiece con sqlp_sbx_
-          `ALL PRIVILEGES ON \`sqlp\\_sbx\\_%\`.*`,
+          ...(mode === 'comodin' ? [`ALL PRIVILEGES ON \`sqlp\\_sbx\\_%\`.*`] : []),
           // lectura de las bases originales para poder copiarlas
-          `SELECT, SHOW VIEW ON \`sqlp\\_ds\\_%\`.*`,
+          ...datasetGrants,
         ],
       },
     ];
+    // Permisos que versiones anteriores del setup pudieron haber dado y hay que quitar.
+    const legacy = [`ALL PRIVILEGES ON \`sqlp\\_sbx\\_%\`.*`, `SELECT, SHOW VIEW ON \`sqlp\\_ds\\_%\`.*`];
     for (const u of users) {
       for (const host of config.mysql.userHosts) {
-        await admin.query('CREATE USER IF NOT EXISTS ?@? IDENTIFIED BY ? WITH MAX_USER_CONNECTIONS 20', [u.user, host, u.password]);
-        await admin.query('ALTER USER ?@? IDENTIFIED BY ? WITH MAX_USER_CONNECTIONS 20', [u.user, host, u.password]);
-        await admin.query('REVOKE ALL PRIVILEGES, GRANT OPTION FROM ?@?', [u.user, host]);
-        for (const g of u.grants) await admin.query(`GRANT ${g} TO ?@?`, [u.user, host]);
+        await step(`crear el usuario ${u.user}@${host}`, async () => {
+          await admin.query('CREATE USER IF NOT EXISTS ?@? IDENTIFIED BY ? WITH MAX_USER_CONNECTIONS 20', [u.user, host, u.password]);
+          await admin.query('ALTER USER ?@? IDENTIFIED BY ? WITH MAX_USER_CONNECTIONS 20', [u.user, host, u.password]);
+        });
+        await step(`quitar permisos anteriores de ${u.user}@${host}`, () => revokeAll(admin, u.user, host, [...legacy, ...u.grants]));
+        for (const g of u.grants) await step(`dar ${g} a ${u.user}@${host}`, () => admin.query(`GRANT ${g} TO ?@?`, [u.user, host]));
       }
       log(`Usuario ${u.user} configurado (${config.mysql.userHosts.join(', ')})`);
     }
@@ -115,5 +125,39 @@ export async function runSetup(opts: SetupOptions): Promise<void> {
     }
   } finally {
     await admin.end().catch(() => {});
+  }
+}
+
+/** Ejecuta un paso del setup; si falla, el error dice cuál fue. */
+async function step<T>(what: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    throw new Error(`No se pudo ${what}: ${(e as Error).message}`, { cause: e });
+  }
+}
+
+/**
+ * Deja al usuario sin permisos antes de volver a dárselos.
+ * "REVOKE ALL PRIVILEGES, GRANT OPTION FROM u" necesita acceso a la base "mysql", que en
+ * Aiven el administrador no tiene. En ese caso se quitan uno por uno los permisos que
+ * esta app pudo haber dado.
+ */
+async function revokeAll(admin: Connection, user: string, host: string, known: string[]): Promise<void> {
+  try {
+    await admin.query('REVOKE ALL PRIVILEGES, GRANT OPTION FROM ?@?', [user, host]);
+    return;
+  } catch {
+    /* sigue abajo */
+  }
+  for (const g of known) {
+    const on = g.slice(g.indexOf(' ON ') + 4);
+    try {
+      await admin.query(`REVOKE ALL PRIVILEGES ON ${on} FROM ?@?`, [user, host]);
+    } catch (e) {
+      // 1141/1147: el usuario no tenía ese permiso.
+      const errno = (e as { errno?: number }).errno;
+      if (errno !== 1141 && errno !== 1147) throw e;
+    }
   }
 }

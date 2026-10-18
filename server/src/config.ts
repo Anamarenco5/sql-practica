@@ -69,6 +69,12 @@ export const config = {
     user: process.env.SANDBOX_DB_USER ?? 'sqlp_sandbox',
     password: () => required('SANDBOX_DB_PASSWORD'),
   },
+  // Administrador de MySQL: se usa en el setup y, solo si el servidor tiene partial_revokes
+  // (Aiven), para crear/borrar cada sandbox y darle permisos (ver db/grants.ts).
+  admin: {
+    user: process.env.MYSQL_ADMIN_USER ?? 'root',
+    password: () => required('MYSQL_ADMIN_PASSWORD'),
+  },
   limits: {
     timeoutMs: num('QUERY_TIMEOUT_MS', 5000),
     maxRows: num('MAX_ROWS', 10000), // filas leídas como máximo por resultado
