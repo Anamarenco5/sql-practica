@@ -55,6 +55,9 @@ export async function prepareSession(conn: Connection, opts: { readOnly: boolean
   await conn.query(`SET SESSION sql_select_limit = ${config.limits.maxRows + 1}`); // corta resultados gigantes
   await conn.query(`SET SESSION sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'`);
   if (opts.readOnly) await conn.query('SET SESSION TRANSACTION READ ONLY');
+  // Algunos MySQL en la nube (Aiven) exigen PRIMARY KEY en toda tabla; se intenta relajarlo
+  // para que los ejercicios funcionen igual que en Workbench. Si no hay permiso, se ignora.
+  await conn.query('SET SESSION sql_require_primary_key = 0').catch(() => {});
 }
 
 interface RawSet {

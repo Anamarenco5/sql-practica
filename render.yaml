@@ -1,0 +1,48 @@
+# Configuración para Render (https://render.com) — "Blueprint".
+# Las variables marcadas con sync: false se cargan a mano en el panel de Render
+# (son secretas y nunca se guardan en el repositorio).
+services:
+  - type: web
+    name: sql-practica
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: AUTO_SETUP
+        value: "1"
+      # Ajustes para el plan gratis de Aiven (76 conexiones en total)
+      - key: SANDBOX_POOL
+        value: "1"
+      - key: MAX_PARALLEL_ENVS
+        value: "4"
+      - key: APP_POOL_SIZE
+        value: "3"
+      - key: MYSQL_USER_HOSTS
+        value: "%"
+      # --- Se completan en el panel de Render ---
+      - key: PUBLIC_ORIGIN # ej: https://sql-practica.onrender.com
+        sync: false
+      - key: MYSQL_HOST
+        sync: false
+      - key: MYSQL_PORT
+        sync: false
+      - key: MYSQL_ADMIN_USER # avnadmin
+        sync: false
+      - key: MYSQL_ADMIN_PASSWORD
+        sync: false
+      - key: MYSQL_SSL_CA # contenido del ca.pem de Aiven
+        sync: false
+      - key: APP_DB_PASSWORD
+        generateValue: true
+      - key: READER_DB_PASSWORD
+        generateValue: true
+      - key: SANDBOX_DB_PASSWORD
+        generateValue: true
+      - key: ADMIN_EMAILS
+        sync: false

@@ -15,8 +15,9 @@ const common = {
   bigNumberStrings: true,
   decimalNumbers: false, // DECIMAL como texto: no perdemos precisión
   multipleStatements: false, // dividimos el script nosotros (ver splitter.ts)
-  connectTimeout: 5000,
+  connectTimeout: 10000,
   charset: 'utf8mb4',
+  ssl: config.mysql.ssl,
 };
 
 let appPool: Pool | null = null;
@@ -27,7 +28,7 @@ export function getAppPool(): Pool {
       user: config.app.user,
       password: config.app.password(),
       database: config.app.database,
-      connectionLimit: 5,
+      connectionLimit: config.mysql.appPoolSize,
     });
   }
   return appPool;

@@ -24,6 +24,15 @@ Trae **94 ejercicios** sobre la base **Universidad** de los trabajos prácticos:
 - **Filtros** por texto (título o TP), dificultad, estado, tipo y origen.
 - **Ejercicios propios**: un formulario para cargar enunciado, solución, pistas y criterios de corrección. Antes de guardar, la solución se ejecuta y tiene que aprobar su propio ejercicio.
 
+## Cuentas de usuario
+
+Para usar la app hay que crear una cuenta con email y contraseña. Cada persona tiene su propio progreso, intentos, borradores y ejercicios propios.
+
+- Las contraseñas se guardan con un hash `scrypt` con sal: nunca en texto plano.
+- La sesión es una cookie `HttpOnly` (JavaScript no la puede leer) que dura 30 días.
+- Los emails de `ADMIN_EMAILS` (en `server/.env`) tienen permisos de administradora: pueden **publicar** ejercicios propios para que los vea todo el mundo (aparecen como "Extra"). El resto de los ejercicios propios son privados.
+- Hay límites por persona y por IP: 40 ejecuciones por minuto y 10 intentos de login por minuto.
+
 ## Requisitos
 
 | Programa | Versión | Cómo comprobarlo |
@@ -72,6 +81,34 @@ Abrí <http://localhost:5173>.
 | `Ctrl + Shift + Enter` | Comprobar |
 
 Para detener el servidor: `Ctrl + C` en la terminal.
+
+## Publicar en internet (Render + Aiven, gratis)
+
+La página corre en **Render** y la base de datos en **Aiven for MySQL** (plan Free). Ninguno de los dos pide tarjeta.
+
+**1. Aiven (MySQL)**
+1. Creá un servicio **MySQL** con el plan **Free** (ojo: el que aparece por defecto es "Developer", que es pago).
+2. En *Connection information* anotá **Host** y **Port**, y descargá el **CA certificate** (`ca.pem`).
+3. Opcional: desde la PC, con esos datos en `server/.env` (más `MYSQL_SSL=required` o `MYSQL_SSL_CA`), `npm run db:check` verifica que todo funcione.
+
+**2. Render (la página)**
+1. En Render: **New → Blueprint**, conectá este repositorio de GitHub. Render lee `render.yaml`.
+2. Completá las variables secretas que pide:
+
+| Variable | Valor |
+|---|---|
+| `PUBLIC_ORIGIN` | la dirección que te da Render, ej: `https://sql-practica.onrender.com` |
+| `MYSQL_HOST` / `MYSQL_PORT` | los de Aiven |
+| `MYSQL_ADMIN_USER` | `avnadmin` |
+| `MYSQL_ADMIN_PASSWORD` | la contraseña de `avnadmin` |
+| `MYSQL_SSL_CA` | el contenido completo de `ca.pem` (desde `-----BEGIN CERTIFICATE-----` hasta `-----END CERTIFICATE-----`) |
+| `ADMIN_EMAILS` | tu email (con el que te vas a registrar) |
+
+Las contraseñas de los tres usuarios internos (`APP_DB_PASSWORD`, etc.) las genera Render solo.
+
+3. Al arrancar, con `AUTO_SETUP=1`, el servidor crea las tablas y los usuarios, y carga la base Universidad en Aiven (la primera vez tarda un minuto más).
+
+**Límites del plan gratis:** Render apaga la página después de 15 minutos sin uso y tarda alrededor de un minuto en volver. Aiven puede apagar servicios gratis sin actividad: se vuelven a encender desde su panel.
 
 ## Pruebas
 

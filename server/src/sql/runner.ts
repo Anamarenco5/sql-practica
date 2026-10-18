@@ -43,7 +43,7 @@ export interface Env {
 // Cada usuario de MySQL tiene un máximo de 20 conexiones (MAX_USER_CONNECTIONS del setup).
 // Cada entorno usa 1 conexión, más 1 extra si hay que cancelar por tiempo; el pool de
 // sandboxes usa SANDBOX_POOL más. Con 8 entornos por usuario queda margen de sobra.
-const envSlots = { reader: semaphore(8), sandbox: semaphore(8) };
+const envSlots = { reader: semaphore(config.limits.parallelEnvs), sandbox: semaphore(config.limits.parallelEnvs) };
 
 /** Abre el entorno de ejecución: la base de práctica (solo lectura) o un sandbox nuevo. */
 export async function openEnv(dataset: string, mode: ExecMode): Promise<Env> {

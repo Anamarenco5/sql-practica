@@ -21,11 +21,37 @@ function num(name: string, def: number): number {
   return v ? Number(v) : def;
 }
 
+const production = process.env.NODE_ENV === 'production';
+
+/** Certificado de la CA para conectarse por SSL (Aiven lo exige). Admite "\n" escritos como texto. */
+function sslConfig() {
+  const ca = process.env.MYSQL_SSL_CA?.replace(/\\n/g, '\n');
+  if (ca) return { ca, rejectUnauthorized: true };
+  if (process.env.MYSQL_SSL === 'required') return { rejectUnauthorized: true };
+  return undefined;
+}
+
 export const config = {
+  production,
   port: num('PORT', 3001),
+  // En la PC: solo 127.0.0.1. En Render hay que escuchar en 0.0.0.0.
+  host: process.env.HOST ?? (production ? '0.0.0.0' : '127.0.0.1'),
+  // Dirección pública (ej: https://sql-practica.onrender.com). Se acepta como Host/Origin válido.
+  publicOrigin: process.env.PUBLIC_ORIGIN ?? '',
+  // Render pone un proxy delante: hace falta para conocer la IP real (límite de pedidos).
+  trustProxy: process.env.TRUST_PROXY === '1' || production,
+  // Emails que tienen permisos de administradora (pueden publicar ejercicios para todos).
+  adminEmails: (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
   mysql: {
     host: process.env.MYSQL_HOST ?? '127.0.0.1',
     port: num('MYSQL_PORT', 3306),
+    ssl: sslConfig(),
+    // Desde qué host se conectan los usuarios de la app: en la PC, localhost; en la nube, '%'.
+    userHosts: (process.env.MYSQL_USER_HOSTS ?? 'localhost,127.0.0.1').split(',').map((s) => s.trim()).filter(Boolean),
+    appPoolSize: num('APP_POOL_SIZE', 5),
   },
   // Usuario de la app: solo puede tocar la base de progreso (sqlpractica_app).
   app: {
@@ -50,8 +76,17 @@ export const config = {
     maxSqlLength: num('MAX_SQL_LENGTH', 20000),
     maxStatements: num('MAX_STATEMENTS', 30),
     sandboxPool: num('SANDBOX_POOL', 2), // copias de la base preparadas de antemano (0 = desactivado)
+    parallelEnvs: num('MAX_PARALLEL_ENVS', 8), // entornos simultáneos por usuario de MySQL
+    runsPerMinute: num('RUNS_PER_MINUTE', 40), // ejecuciones por persona y por minuto
+    authPerMinute: num('AUTH_PER_MINUTE', 10), // intentos de login/registro por IP y por minuto
   },
+  auth: {
+    sessionDays: num('SESSION_DAYS', 30),
+  },
+  // Si están definidos, el servidor completa el setup solo al arrancar (útil en Render).
+  autoSetup: process.env.AUTO_SETUP === '1',
   paths: {
+    client: path.resolve(here, '../../client/dist'),
     datasets: path.resolve(here, '../../db/datasets'),
     exercises: path.resolve(here, '../exercises'), // JSON de ejercicios de fábrica
   },

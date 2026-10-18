@@ -54,6 +54,7 @@ const HINTS: Record<number, string> = {
   1584: 'Parámetros incorrectos en la llamada a la función nativa.',
   1630: 'La función no existe. ¿Dejaste un espacio entre el nombre de la función y el paréntesis?',
   1582: 'Cantidad incorrecta de parámetros para la función.',
+  3750: 'Este servidor MySQL exige que toda tabla tenga PRIMARY KEY (sql_require_primary_key). Agregá una clave primaria, por ejemplo: id INT AUTO_INCREMENT PRIMARY KEY.',
 };
 
 export function toErrorInfo(err: unknown, statementIndex?: number, statementLine?: number): SqlErrorInfo {
