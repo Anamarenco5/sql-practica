@@ -37,7 +37,8 @@ export const config = {
   // En la PC: solo 127.0.0.1. En Render hay que escuchar en 0.0.0.0.
   host: process.env.HOST ?? (production ? '0.0.0.0' : '127.0.0.1'),
   // Dirección pública (ej: https://sql-practica.onrender.com). Se acepta como Host/Origin válido.
-  publicOrigin: process.env.PUBLIC_ORIGIN ?? '',
+  // Si no está, se usa RENDER_EXTERNAL_URL, que Render define solo.
+  publicOrigin: (process.env.PUBLIC_ORIGIN || process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, ''),
   // Render pone un proxy delante: hace falta para conocer la IP real (límite de pedidos).
   trustProxy: process.env.TRUST_PROXY === '1' || production,
   // Emails que tienen permisos de administradora (pueden publicar ejercicios para todos).

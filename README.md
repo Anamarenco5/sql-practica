@@ -97,7 +97,7 @@ La página corre en **Render** y la base de datos en **Aiven for MySQL** (plan F
 
 | Variable | Valor |
 |---|---|
-| `PUBLIC_ORIGIN` | la dirección que te da Render, ej: `https://sql-practica.onrender.com` |
+| `PUBLIC_ORIGIN` | opcional: en Render se toma sola de `RENDER_EXTERNAL_URL`. Cargala solo si usás un dominio propio |
 | `MYSQL_HOST` / `MYSQL_PORT` | los de Aiven |
 | `MYSQL_ADMIN_USER` | `avnadmin` |
 | `MYSQL_ADMIN_PASSWORD` | la contraseña de `avnadmin` |

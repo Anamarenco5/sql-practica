@@ -26,7 +26,7 @@ services:
       - key: MYSQL_USER_HOSTS
         value: "%"
       # --- Se completan en el panel de Render ---
-      - key: PUBLIC_ORIGIN # ej: https://sql-practica.onrender.com
+      - key: PUBLIC_ORIGIN # opcional: si falta se usa RENDER_EXTERNAL_URL
         sync: false
       - key: MYSQL_HOST
         sync: false

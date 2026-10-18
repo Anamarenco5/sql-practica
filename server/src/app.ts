@@ -104,6 +104,13 @@ export function createApp() {
   app.disable('x-powered-by');
   if (config.trustProxy) app.set('trust proxy', 1); // Render: la IP real viene en X-Forwarded-For
 
+  // Chequeo de salud de Render: va antes del filtro de Host porque Render lo pide con
+  // su dirección interna. No devuelve datos ni usa cookies.
+  app.get('/api/health', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ ok: true });
+  });
+
   // Hosts permitidos: la propia computadora y, si está configurada, la dirección pública.
   // - Host: frena ataques de "DNS rebinding".
   // - Origin: frena que otra web abierta en el navegador le haga pedidos a la API (CSRF).
@@ -149,10 +156,6 @@ export function createApp() {
   const viewer = (req: Request) => ({ id: req.user!.id, isAdmin: req.user!.isAdmin });
 
   // ---- Públicas ----
-  app.get('/api/health', (_req, res) => {
-    res.json({ ok: true });
-  });
-
   app.get('/api/topics', (_req, res) => {
     res.json(Object.entries(TOPICS).map(([id, name]) => ({ id, name })));
   });

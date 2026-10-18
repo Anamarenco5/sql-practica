@@ -145,6 +145,13 @@ describe('API: acceso solo local', () => {
     agent = (await newUser(app)).agent;
   });
 
+  it('el chequeo de salud responde con cualquier Host (Render lo pide con su dirección interna)', async () => {
+    const res = await request(app).get('/api/health').set('Host', '10.0.0.5:10000');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(res.headers['set-cookie']).toBeUndefined();
+  });
+
   it('rechaza un Host ajeno (DNS rebinding)', async () => {
     const res = await request(app).get('/api/exercises').set('Host', 'atacante.com');
     expect(res.status).toBe(403);
