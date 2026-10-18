@@ -1,9 +1,13 @@
 import { Link, Route, Routes } from 'react-router-dom';
+import { useAuth } from './auth';
+import { AuthPage } from './pages/AuthPage';
 import { Dashboard } from './pages/Dashboard';
 import { ExerciseEditor } from './pages/ExerciseEditor';
 import { ExercisePage } from './pages/ExercisePage';
 
 export default function App() {
+  const { user, loading, error, logout } = useAuth();
+
   return (
     <div className="app">
       <header className="topbar">
@@ -18,22 +22,43 @@ export default function App() {
           SQL Práctica
         </Link>
         <span className="topbar-note">Diseño de Bases de Datos</span>
+        {user && (
+          <span className="topbar-user">
+            <span>
+              {user.name}
+              {user.isAdmin && <span className="tag plain">Admin</span>}
+            </span>
+            <button className="link" onClick={logout}>
+              Cerrar sesión
+            </button>
+          </span>
+        )}
       </header>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/ejercicio/:id" element={<ExercisePage />} />
-        <Route path="/ejercicios/nuevo" element={<ExerciseEditor />} />
-        <Route path="/ejercicios/:id/editar" element={<ExerciseEditor />} />
-        <Route
-          path="*"
-          element={
-            <main className="page narrow">
-              <h1>Esta página no existe</h1>
-              <Link to="/">Ir a los ejercicios</Link>
-            </main>
-          }
-        />
-      </Routes>
+      {loading ? (
+        <main className="page narrow muted">Cargando…</main>
+      ) : error ? (
+        <main className="page narrow">
+          <p className="error-msg">{error}</p>
+        </main>
+      ) : !user ? (
+        <AuthPage />
+      ) : (
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/ejercicio/:id" element={<ExercisePage />} />
+          <Route path="/ejercicios/nuevo" element={<ExerciseEditor />} />
+          <Route path="/ejercicios/:id/editar" element={<ExerciseEditor />} />
+          <Route
+            path="*"
+            element={
+              <main className="page narrow">
+                <h1>Esta página no existe</h1>
+                <Link to="/">Ir a los ejercicios</Link>
+              </main>
+            }
+          />
+        </Routes>
+      )}
     </div>
   );
 }
